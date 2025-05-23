@@ -14,18 +14,65 @@
         <div class="knob" id="knob2">
             <div class="prompt-display knob-prompt" id="knob2-prompt">Knob 2 Prompt</div>
         </div>
+        <div class="knob" id="knob3">
+            <div class="prompt-display knob-prompt" id="knob3-prompt">Knob 3 Prompt</div>
+        </div>
+        <div class="knob" id="knob4">
+            <div class="prompt-display knob-prompt" id="knob4-prompt">Knob 4 Prompt</div>
+        </div>
+        <div class="knob" id="knob5">
+            <div class="prompt-display knob-prompt" id="knob5-prompt">Knob 5 Prompt</div>
+        </div>
+        <div class="knob" id="knob6">
+            <div class="prompt-display knob-prompt" id="knob6-prompt">Knob 6 Prompt</div>
+        </div>
+        <div class="knob" id="knob7">
+            <div class="prompt-display knob-prompt" id="knob7-prompt">Knob 7 Prompt</div>
+        </div>
+        <div class="knob" id="knob8">
+            <div class="prompt-display knob-prompt" id="knob8-prompt">Knob 8 Prompt</div>
+        </div>
     </div>
 
     <div class="slider-container">
-        <div class="prompt-display slider-prompt" id="slider-prompt">Slider Prompt</div>
-        <input type="range" min="0" max="127" value="64" id="slider">
+        <div class="slider-item">
+            <div class="prompt-display slider-prompt" id="slider1-prompt">Slider 1 Prompt</div>
+            <input type="range" min="0" max="127" value="64" id="slider1">
+        </div>
+        <div class="slider-item">
+            <div class="prompt-display slider-prompt" id="slider2-prompt">Slider 2 Prompt</div>
+            <input type="range" min="0" max="127" value="64" id="slider2">
+        </div>
+        <div class="slider-item">
+            <div class="prompt-display slider-prompt" id="slider3-prompt">Slider 3 Prompt</div>
+            <input type="range" min="0" max="127" value="64" id="slider3">
+        </div>
+        <div class="slider-item">
+            <div class="prompt-display slider-prompt" id="slider4-prompt">Slider 4 Prompt</div>
+            <input type="range" min="0" max="127" value="64" id="slider4">
+        </div>
+        <div class="slider-item">
+            <div class="prompt-display slider-prompt" id="slider5-prompt">Slider 5 Prompt</div>
+            <input type="range" min="0" max="127" value="64" id="slider5">
+        </div>
+        <div class="slider-item">
+            <div class="prompt-display slider-prompt" id="slider6-prompt">Slider 6 Prompt</div>
+            <input type="range" min="0" max="127" value="64" id="slider6">
+        </div>
+        <div class="slider-item">
+            <div class="prompt-display slider-prompt" id="slider7-prompt">Slider 7 Prompt</div>
+            <input type="range" min="0" max="127" value="64" id="slider7">
+        </div>
+        <div class="slider-item">
+            <div class="prompt-display slider-prompt" id="slider8-prompt">Slider 8 Prompt</div>
+            <input type="range" min="0" max="127" value="64" id="slider8">
+        </div>
     </div>
 
     <script>
         // Xử lý hiển thị prompt
         document.querySelectorAll('.prompt-display').forEach(prompt => {
             prompt.addEventListener('click', function() {
-                // Hiển thị modal hoặc form để chỉnh sửa prompt
                 const newPrompt = prompt('Enter new prompt:', this.textContent);
                 if (newPrompt) {
                     this.textContent = newPrompt;
@@ -34,18 +81,19 @@
         });
 
         // Xử lý slider
-        const slider = document.getElementById('slider');
-        slider.addEventListener('input', function() {
-            // Gửi giá trị MIDI
-            fetch('/midi', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    type: 'slider',
-                    value: this.value
-                })
+        document.querySelectorAll('input[type="range"]').forEach(slider => {
+            slider.addEventListener('input', function() {
+                fetch('/midi', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        type: 'slider',
+                        id: this.id,
+                        value: this.value
+                    })
+                });
             });
         });
 
@@ -70,7 +118,6 @@
                 
                 knob.style.transform = `rotate(${rotation}deg)`;
                 
-                // Gửi giá trị MIDI
                 fetch('/midi', {
                     method: 'POST',
                     headers: {

@@ -3,12 +3,15 @@
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
-    width: 80%;
-    max-width: 600px;
+    width: 90%;
+    max-width: 1200px;
     background: rgba(0, 0, 0, 0.8);
     padding: 20px;
     border-radius: 10px;
     z-index: 1000;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 15px;
 }
 
 .knob-container {
@@ -16,9 +19,19 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
     gap: 20px;
+    width: 90%;
+    max-width: 1200px;
     z-index: 1000;
+}
+
+.slider-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
 }
 
 .prompt-display {
@@ -26,12 +39,13 @@
     background: rgba(0, 0, 0, 0.9);
     padding: 10px;
     border-radius: 5px;
-    max-width: 300px;
+    max-width: 200px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     cursor: pointer;
     transition: all 0.3s ease;
+    font-size: 0.9em;
 }
 
 .prompt-display:hover {
@@ -58,16 +72,31 @@
 input[type="range"] {
     width: 100%;
     margin: 10px 0;
+    height: 4px;
+    -webkit-appearance: none;
+    background: #666;
+    border-radius: 2px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    background: #fff;
+    border-radius: 50%;
+    cursor: pointer;
 }
 
 /* Style cho knob */
 .knob {
-    width: 60px;
-    height: 60px;
+    width: 100%;
+    aspect-ratio: 1;
+    max-width: 80px;
     border-radius: 50%;
     background: #333;
     position: relative;
     cursor: pointer;
+    margin: 0 auto;
 }
 
 .knob::after {
@@ -76,8 +105,46 @@ input[type="range"] {
     top: 50%;
     left: 50%;
     width: 4px;
-    height: 20px;
+    height: 30%;
     background: #fff;
     transform-origin: bottom center;
     transform: translate(-50%, -100%);
+}
+
+/* Media queries cho responsive */
+@media (max-width: 1200px) {
+    .knob {
+        max-width: 60px;
+    }
+}
+
+@media (max-width: 768px) {
+    .slider-container, .knob-container {
+        width: 95%;
+        gap: 10px;
+    }
+    
+    .knob {
+        max-width: 40px;
+    }
+    
+    .prompt-display {
+        max-width: 150px;
+        font-size: 0.8em;
+    }
+}
+
+@media (max-width: 480px) {
+    .slider-container, .knob-container {
+        gap: 5px;
+    }
+    
+    .knob {
+        max-width: 30px;
+    }
+    
+    .prompt-display {
+        max-width: 100px;
+        font-size: 0.7em;
+    }
 } 
