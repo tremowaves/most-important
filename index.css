@@ -1,11 +1,13 @@
 html, body {
   height: 100%;
   margin: 0;
-  font-family: 'Google Sans', sans-serif;
+  font-family: 'Google Sans', sans-serif, system-ui;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 body {
-  overflow:hidden;
-  background: #111;
+  overflow: hidden;
+  background-color: #111; /* Base background color */
   color: #fff;
 }
 body.dragging {
@@ -16,99 +18,125 @@ body.dragging * {
   pointer-events: none;
 }
 
-#controls-panel {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  padding: 15px;
-  display: flex;
-  gap: 15px;
-  align-items: center;
-  background: rgba(0,0,0,0.7);
-  backdrop-filter: blur(10px);
-  z-index: 1000;
+/* General button styling (can be overridden by specific components) */
+button, select {
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1.5px solid #fff;
+  border-radius: 4px;
+  padding: 6px 12px;
+  transition: background-color 0.2s, color 0.2s;
+  font-size: 0.9rem;
 }
 
-.preset-controls, .midi-controls {
+button:hover, select:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+button.active, select.active {
+  background-color: #fff;
+  color: #000;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+select {
+  padding: 7px 10px; /* Slightly more padding for select */
+}
+
+/* Input for file import (hidden) */
+input[type="file"] {
+  display: none;
+}
+
+/* Styling for the new Controls Panel */
+.controls-panel {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  background: rgba(10, 10, 10, 0.7);
+  backdrop-filter: blur(5px);
+  padding: 10px;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap; /* Allow items to wrap on smaller screens */
+  gap: 10px;
+  align-items: center;
+  z-index: 100;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.controls-panel > div {
   display: flex;
   gap: 8px;
   align-items: center;
 }
 
-button {
-  font: inherit;
-  font-weight: 500;
-  padding: 8px 16px;
+.controls-panel label {
+  font-size: 0.9rem;
+  margin-right: 5px;
+}
+
+.preset-name-display {
+  font-style: italic;
+  color: #ccc;
+  font-size: 0.85rem;
+  margin-left: auto; /* Pushes it to the right if space allows */
+  padding-right: 10px;
+}
+
+.download-recording-button {
+  margin-top: 15px;
+  padding: 8px 15px;
+  background-color: #4CAF50; /* Green */
   border: none;
-  border-radius: 4px;
-  background: rgba(255,255,255,0.1);
-  color: #fff;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  color: white;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 1rem;
+  border-radius: 5px;
+}
+.download-recording-button:hover {
+  background-color: #45a049;
 }
 
-button:hover {
-  background: rgba(255,255,255,0.2);
+/* Responsive adjustments for Controls Panel */
+@media (max-width: 768px) {
+  .controls-panel {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .controls-panel > div {
+    width: 100%; /* Make control groups take full width */
+    justify-content: space-between; /* Distribute items within groups */
+  }
+  .controls-panel button, .controls-panel select {
+    flex-grow: 1; /* Allow buttons/selects to grow if needed */
+    min-width: 100px; /* Ensure they don't get too small */
+  }
+  .preset-name-display {
+    width: 100%;
+    text-align: left;
+    margin-left: 0;
+    padding-top: 5px;
+  }
 }
 
-button.active {
-  background: #fff;
-  color: #000;
-}
-
-select {
-  font: inherit;
-  padding: 8px;
-  border: none;
-  border-radius: 4px;
-  background: rgba(255,255,255,0.1);
-  color: #fff;
-  cursor: pointer;
-}
-
-select option {
-  background: #000;
-  color: #fff;
-}
-
-.recording-indicator {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #ff0000;
-  animation: blink 1s infinite;
-}
-
-@keyframes blink {
-  50% { opacity: 0.5; }
-}
-
-#download-button {
-  display: none;
-  background: #4CAF50;
-}
-
-#download-button.visible {
-  display: block;
-}
-
-#download-button:hover {
-  background: #45a049;
+/* Styles for PromptDJMidi component if needed, e.g., for the main grid positioning */
+prompt-dj-midi {
+  padding-top: 80px; /* Adjust if controls panel is taller */
 }
 
 @media (max-width: 768px) {
-  #controls-panel {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .preset-controls, .midi-controls {
-    flex-wrap: wrap;
-  }
-  
-  button, select {
-    flex: 1;
-    min-width: 120px;
+ prompt-dj-midi {
+    padding-top: 180px; /* More padding if panel stacks vertically */
   }
 }

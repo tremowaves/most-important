@@ -57,17 +57,24 @@ async function decodeAudioData(
     dataFloat32[i] = dataInt16[i] / 32768.0;
   }
   // Extract interleaved channels
-  if (numChannels === 0) {
+  if (numChannels === 0) { // Assuming numChannels=0 means mono and data is already in that format, or 1 for mono.
     buffer.copyToChannel(dataFloat32, 0);
-  } else {
+  } else { //  numChannels >= 1
+     // If data is interleaved, it should be de-interleaved.
+     // If data is already planar, this logic might need adjustment based on input format.
+     // The original code implies de-interleaving.
     for (let i = 0; i < numChannels; i++) {
-      const channel = dataFloat32.filter(
-        (_, index) => index % numChannels === i,
-      );
-      buffer.copyToChannel(channel, i);
+      const channelData = new Float32Array(dataFloat32.length / numChannels);
+      for (let j = 0, k = 0; j < dataFloat32.length; j++) {
+        if (j % numChannels === i) {
+          channelData[k++] = dataFloat32[j];
+        }
+      }
+      if (i < buffer.numberOfChannels) { // Ensure we don't try to copy to a non-existent channel
+        buffer.copyToChannel(channelData, i);
+      }
     }
   }
-
   return buffer;
 }
 

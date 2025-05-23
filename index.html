@@ -1,20 +1,32 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PromptDJ MIDI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="index.css" />
     <script type="importmap">
       {
         "imports": {
           "@google/genai": "https://esm.sh/@google/genai@^1.0.0",
           "lit/": "https://esm.sh/lit@^3.3.0/",
-          "lit": "https://esm.sh/lit@^3.3.0"
+          "lit": "https://esm.sh/lit@^3.3.0",
+          "lit/decorators": "https://esm.sh/lit@^3.3.0/decorators.js",
+          "lit/directives/style-map": "https://esm.sh/lit@^3.3.0/directives/style-map.js",
+          "lit/directives/class-map": "https://esm.sh/lit@^3.3.0/directives/class-map.js"
         }
       }
     </script>
+    <style>
+      /* Basic styles to prevent flash of unstyled content if needed */
+      body { background-color: #111; color: #fff; }
+    </style>
   </head>
   <body>
+    <!-- The main application will be appended here by index.tsx -->
     <script src="index.tsx" type="module"></script>
   </body>
 </html>
-<link rel="stylesheet" href="index.css">
-<script src="index.tsx" type="module"></script>
