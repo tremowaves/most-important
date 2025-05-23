@@ -1,0 +1,83 @@
+.slider-container {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80%;
+    max-width: 600px;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 20px;
+    border-radius: 10px;
+    z-index: 1000;
+}
+
+.knob-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    gap: 20px;
+    z-index: 1000;
+}
+
+.prompt-display {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.9);
+    padding: 10px;
+    border-radius: 5px;
+    max-width: 300px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.prompt-display:hover {
+    white-space: normal;
+    overflow: visible;
+    z-index: 1001;
+}
+
+.slider-prompt {
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 10px;
+}
+
+.knob-prompt {
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 10px;
+}
+
+/* Style cho slider */
+input[type="range"] {
+    width: 100%;
+    margin: 10px 0;
+}
+
+/* Style cho knob */
+.knob {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #333;
+    position: relative;
+    cursor: pointer;
+}
+
+.knob::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 4px;
+    height: 20px;
+    background: #fff;
+    transform-origin: bottom center;
+    transform: translate(-50%, -100%);
+} 

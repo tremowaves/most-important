@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIDI Controller</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="knob-container">
+        <div class="knob" id="knob1">
+            <div class="prompt-display knob-prompt" id="knob1-prompt">Knob 1 Prompt</div>
+        </div>
+        <div class="knob" id="knob2">
+            <div class="prompt-display knob-prompt" id="knob2-prompt">Knob 2 Prompt</div>
+        </div>
+    </div>
+
+    <div class="slider-container">
+        <div class="prompt-display slider-prompt" id="slider-prompt">Slider Prompt</div>
+        <input type="range" min="0" max="127" value="64" id="slider">
+    </div>
+
+    <script>
+        // Xử lý hiển thị prompt
+        document.querySelectorAll('.prompt-display').forEach(prompt => {
+            prompt.addEventListener('click', function() {
+                // Hiển thị modal hoặc form để chỉnh sửa prompt
+                const newPrompt = prompt('Enter new prompt:', this.textContent);
+                if (newPrompt) {
+                    this.textContent = newPrompt;
+                }
+            });
+        });
+
+        // Xử lý slider
+        const slider = document.getElementById('slider');
+        slider.addEventListener('input', function() {
+            // Gửi giá trị MIDI
+            fetch('/midi', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    type: 'slider',
+                    value: this.value
+                })
+            });
+        });
+
+        // Xử lý knob
+        document.querySelectorAll('.knob').forEach(knob => {
+            let isDragging = false;
+            let startY;
+            let startValue = 64;
+
+            knob.addEventListener('mousedown', function(e) {
+                isDragging = true;
+                startY = e.clientY;
+                startValue = parseInt(knob.style.transform?.match(/rotate\((\d+)deg\)/)?.[1] || 0);
+            });
+
+            document.addEventListener('mousemove', function(e) {
+                if (!isDragging) return;
+                
+                const deltaY = startY - e.clientY;
+                const newValue = Math.max(0, Math.min(127, startValue + deltaY));
+                const rotation = (newValue / 127) * 360;
+                
+                knob.style.transform = `rotate(${rotation}deg)`;
+                
+                // Gửi giá trị MIDI
+                fetch('/midi', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        type: 'knob',
+                        id: knob.id,
+                        value: newValue
+                    })
+                });
+            });
+
+            document.addEventListener('mouseup', function() {
+                isDragging = false;
+            });
+        });
+    </script>
+</body>
+</html> 
