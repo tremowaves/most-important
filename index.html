@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
+    <meta charset="utf- रीड">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>PromptDJ MIDI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,12 +11,12 @@
     <script type="importmap">
       {
         "imports": {
-          "@google/genai": "https://esm.sh/@google/genai@^1.0.0",
-          "lit/": "https://esm.sh/lit@^3.3.0/",
-          "lit": "https://esm.sh/lit@^3.3.0",
-          "lit/decorators": "https://esm.sh/lit@^3.3.0/decorators.js",
-          "lit/directives/style-map": "https://esm.sh/lit@^3.3.0/directives/style-map.js",
-          "lit/directives/class-map": "https://esm.sh/lit@^3.3.0/directives/class-map.js"
+          "@google/genai": "https://esm.sh/@google/genai@^1.0.0"
+          /*
+            Lit-related entries are removed because Vite will serve 'lit'
+            and its submodules (decorators, directives) from your local node_modules
+            after you run 'npm install lit'.
+          */
         }
       }
     </script>

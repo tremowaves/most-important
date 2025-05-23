@@ -5,7 +5,7 @@
 
 import {Blob} from '@google/genai';
 
-function encode(bytes) {
+function encode(bytes: Uint8Array): string {
   let binary = '';
   const len = bytes.byteLength;
   for (let i = 0; i < len; i++) {
@@ -14,7 +14,7 @@ function encode(bytes) {
   return btoa(binary);
 }
 
-function decode(base64) {
+function decode(base64: string): Uint8Array {
   const binaryString = atob(base64);
   const len = binaryString.length;
   const bytes = new Uint8Array(len);
@@ -28,10 +28,8 @@ function createBlob(data: Float32Array): Blob {
   const l = data.length;
   const int16 = new Int16Array(l);
   for (let i = 0; i < l; i++) {
-    // convert float32 -1 to 1 to int16 -32768 to 32767
     int16[i] = data[i] * 32768;
   }
-
   return {
     data: encode(new Uint8Array(int16.buffer)),
     mimeType: 'audio/pcm;rate=16000',
@@ -46,34 +44,29 @@ async function decodeAudioData(
 ): Promise<AudioBuffer> {
   const buffer = ctx.createBuffer(
     numChannels,
-    data.length / 2 / numChannels,
+    data.length / 2 / numChannels, 
     sampleRate,
   );
-
-  const dataInt16 = new Int16Array(data.buffer);
+  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
   const l = dataInt16.length;
   const dataFloat32 = new Float32Array(l);
   for (let i = 0; i < l; i++) {
     dataFloat32[i] = dataInt16[i] / 32768.0;
   }
-  // Extract interleaved channels
-  if (numChannels === 0) { // Assuming numChannels=0 means mono and data is already in that format, or 1 for mono.
+  if (numChannels === 1) { 
     buffer.copyToChannel(dataFloat32, 0);
-  } else { //  numChannels >= 1
-     // If data is interleaved, it should be de-interleaved.
-     // If data is already planar, this logic might need adjustment based on input format.
-     // The original code implies de-interleaving.
+  } else if (numChannels > 1) { 
     for (let i = 0; i < numChannels; i++) {
-      const channelData = new Float32Array(dataFloat32.length / numChannels);
-      for (let j = 0, k = 0; j < dataFloat32.length; j++) {
-        if (j % numChannels === i) {
-          channelData[k++] = dataFloat32[j];
+      if (i < buffer.numberOfChannels) { 
+        const channelData = new Float32Array(dataFloat32.length / numChannels);
+        for (let j = 0, k = 0; j < dataFloat32.length / numChannels; j++) {
+          channelData[k++] = dataFloat32[j * numChannels + i];
         }
-      }
-      if (i < buffer.numberOfChannels) { // Ensure we don't try to copy to a non-existent channel
         buffer.copyToChannel(channelData, i);
       }
     }
+  } else {
+    console.warn(`decodeAudioData called with unsupported numChannels: ${numChannels}`);
   }
   return buffer;
 }
