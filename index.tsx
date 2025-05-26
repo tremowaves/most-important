@@ -10,7 +10,8 @@ import { styleMap } from 'lit/directives/style-map.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 import { GoogleGenAI, type LiveMusicSession, type LiveMusicServerMessage } from '@google/genai';
-import { decode, decodeAudioData } from './utils'
+import { decode, decodeAudioData } from './utils';
+import { getWaveBlob } from 'webm-to-wav-converter';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, apiVersion: 'v1alpha' });
 const model = 'lyria-realtime-exp';
@@ -503,10 +504,11 @@ class PromptDjMidi extends LitElement {
     
     #playback-controls-section {
       display: flex;
-      gap: 10px; /* Adjusted gap for more buttons */
+      gap: 8px; /* Adjusted gap for more buttons */
       align-items: center;
       margin-top: 10px; /* Space above play button area */
       flex-shrink: 0; /* Prevent shrinking */
+      flex-wrap: wrap; /* Allow buttons to wrap if not enough space */
     }
     play-pause-button { 
       width: 12vmin; 
@@ -516,6 +518,9 @@ class PromptDjMidi extends LitElement {
     #playback-controls-section button {
         min-width: 80px; /* Example: adjust as needed */
         padding: 5px 10px; /* Example: adjust as needed */
+    }
+    .download-recording-button { /* Keep specific styling if needed */
+        /* padding: 8px 15px; */ /* from original index.css */
     }
     
     /* Hide MIDI select initially if showMidi is false, using Lit's styleMap or direct styling */
@@ -547,9 +552,14 @@ class PromptDjMidi extends LitElement {
   @state() private isRecording: boolean = false;
   private mediaRecorder: MediaRecorder | null = null;
   private recordedChunks: Blob[] = [];
-  @state() private recordedAudioURL: string | null = null;
+  
+  // <<< NEW STATE FOR RECORDING URLS AND CONVERSION STATUS
+  @state() private recordedAudioURL_WebM: string | null = null;
+  @state() private recordedAudioURL_WAV: string | null = null;
+  @state() private isConverting: boolean = false;
+  // END OF NEW STATE
+
   private streamDestination: MediaStreamAudioDestinationNode | null = null;
-  // private _justPausedForAutoDownload = false; // REMOVED - No longer needed
 
   @state() private namedPresets: Preset[] = [];
   @state() private activePresetName: string | null = null;
@@ -578,7 +588,6 @@ class PromptDjMidi extends LitElement {
     this.outputNode.connect(this.audioAnalyser.node);
     this.outputNode.connect(this.audioContext.destination);
     if (this.audioContext.state === 'suspended') { this.audioContext.resume(); }
-    // Ensure streamDestination is created and connected for recording
     if (!this.streamDestination) { 
         this.streamDestination = this.audioContext.createMediaStreamDestination(); 
     }
@@ -599,10 +608,12 @@ class PromptDjMidi extends LitElement {
     if (this.audioLevelRafId) cancelAnimationFrame(this.audioLevelRafId);
     this.midiDispatcher.removeEventListener('midideviceschange', this.handleMidiDevicesChange.bind(this));
     this.session?.close();
-    // Stop recording if active when component is disconnected
     if (this.isRecording && this.mediaRecorder && this.mediaRecorder.state === "recording") {
         this.mediaRecorder.stop();
     }
+    // Revoke URLs on disconnect
+    if (this.recordedAudioURL_WebM) URL.revokeObjectURL(this.recordedAudioURL_WebM);
+    if (this.recordedAudioURL_WAV) URL.revokeObjectURL(this.recordedAudioURL_WAV);
     this.audioContext.close();
   }
 
@@ -657,21 +668,18 @@ class PromptDjMidi extends LitElement {
     this.playbackState = 'loading';  this.outputNode.gain.setValueAtTime(0, this.audioContext.currentTime);  this.outputNode.gain.linearRampToValueAtTime(1, this.audioContext.currentTime + 0.2);
     await this.setSessionPrompts();
     this.session.play();
-    // REMOVED: this.startRecording(); 
   }
 
   private pause() { 
     if (this.playbackState !== 'playing' && this.playbackState !== 'loading') return;
     this.session?.pause();  this.outputNode.gain.setValueAtTime(this.outputNode.gain.value, this.audioContext.currentTime); this.outputNode.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + 0.2); 
     this.playbackState = 'paused';
-    // REMOVED: Auto-download logic
     this.nextStartTime = 0; 
   }
 
-  private stop(isErrorStop: boolean = false) { // Parameter isErrorStop is kept for context but not used for recording logic
+  private stop(isErrorStop: boolean = false) {
     this.session?.stop(); this.outputNode.gain.setValueAtTime(this.outputNode.gain.value, this.audioContext.currentTime); this.outputNode.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + 0.1);
     this.playbackState = 'stopped'; this.nextStartTime = 0; 
-    // REMOVED: Old recording stop logic
   }
 
   private async handlePlayPause() { 
@@ -679,7 +687,6 @@ class PromptDjMidi extends LitElement {
     switch (this.playbackState) { case 'playing': this.pause(); break; case 'paused': case 'stopped': await this.play(); break; case 'loading':  this.stop(); break; }
   }
 
-  // --- NEW INDEPENDENT RECORDING ---
   private handleToggleRecording() {
     if (this.isRecording) {
       this.stopIndependentRecording();
@@ -695,18 +702,19 @@ class PromptDjMidi extends LitElement {
       return;
     }
 
-    // Clear any previously recorded URL and chunks
-    if (this.recordedAudioURL) {
-      URL.revokeObjectURL(this.recordedAudioURL);
-      this.recordedAudioURL = null;
-    }
+    // Clear any previously recorded URLs and reset states
+    if (this.recordedAudioURL_WebM) URL.revokeObjectURL(this.recordedAudioURL_WebM);
+    if (this.recordedAudioURL_WAV) URL.revokeObjectURL(this.recordedAudioURL_WAV);
+    this.recordedAudioURL_WebM = null;
+    this.recordedAudioURL_WAV = null;
     this.recordedChunks = [];
+    this.isConverting = false; // Ensure conversion status is reset
 
     try {
       const options: { mimeType?: string } = { mimeType: 'audio/webm;codecs=opus' };
       if (!MediaRecorder.isTypeSupported(options.mimeType || '')) {
         console.warn(`${options.mimeType} not supported, trying default audio/webm.`);
-        options.mimeType = 'audio/webm'; // Fallback to generic webm if opus isn't supported
+        options.mimeType = 'audio/webm';
          if (!MediaRecorder.isTypeSupported(options.mimeType || '')) {
             console.warn(`${options.mimeType} also not supported, trying browser default.`);
             delete options.mimeType;
@@ -725,34 +733,54 @@ class PromptDjMidi extends LitElement {
       }
     };
 
-    this.mediaRecorder.onstop = () => {
+    this.mediaRecorder.onstop = async () => { // <<< MADE ASYNC FOR AWAIT
       if (this.recordedChunks.length > 0) {
-        const blob = new Blob(this.recordedChunks, { type: this.mediaRecorder?.mimeType || 'audio/webm' });
-        if (this.recordedAudioURL) { // Revoke old URL if it exists
-          URL.revokeObjectURL(this.recordedAudioURL);
+        const webmBlob = new Blob(this.recordedChunks, { type: this.mediaRecorder?.mimeType || 'audio/webm' });
+        
+        // Create URL for WebM
+        if (this.recordedAudioURL_WebM) URL.revokeObjectURL(this.recordedAudioURL_WebM);
+        this.recordedAudioURL_WebM = URL.createObjectURL(webmBlob);
+        
+        this.toastMessage.show("WebM recording finished. Converting to WAV...", 0); // No auto-hide
+        this.isConverting = true;
+        this.recordedAudioURL_WAV = null; // Reset WAV URL while converting
+        this.requestUpdate();
+
+        try {
+          const wavBlob = await this.convertWebMToWAV(webmBlob); // <<< CONVERSION HAPPENS HERE
+          if (this.recordedAudioURL_WAV) URL.revokeObjectURL(this.recordedAudioURL_WAV); // Should be null
+          this.recordedAudioURL_WAV = URL.createObjectURL(wavBlob);
+          this.toastMessage.show("Conversion to WAV complete. Downloads ready.", 4000);
+        } catch (error) {
+          console.error("Failed to convert WebM to WAV:", error);
+          this.toastMessage.show(`WAV conversion failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 5000);
+          this.recordedAudioURL_WAV = null;
+        } finally {
+          this.isConverting = false;
+          this.requestUpdate();
         }
-        this.recordedAudioURL = URL.createObjectURL(blob);
-        this.toastMessage.show("Recording finished. Download is available.", 3000);
       } else {
-        if (this.recordedAudioURL) {
-          URL.revokeObjectURL(this.recordedAudioURL);
-          this.recordedAudioURL = null;
-        }
+        // No data recorded, clear any existing URLs
+        if (this.recordedAudioURL_WebM) URL.revokeObjectURL(this.recordedAudioURL_WebM);
+        if (this.recordedAudioURL_WAV) URL.revokeObjectURL(this.recordedAudioURL_WAV);
+        this.recordedAudioURL_WebM = null;
+        this.recordedAudioURL_WAV = null;
         this.toastMessage.show("Recording stopped. No audio data captured.", 3000);
       }
       this.isRecording = false;
       this.requestUpdate(); 
     };
 
-    this.mediaRecorder.onerror = (event: Event) => { // Standard Event, check specific error event type if needed
-        const errorEvent = event as MediaRecorderErrorEvent; // More specific type
+    this.mediaRecorder.onerror = (event: Event) => {
+        const errorEvent = event as MediaRecorderErrorEvent;
         console.error("MediaRecorder error:", errorEvent.error);
         this.toastMessage.show(`Recording error: ${errorEvent.error?.name} - ${errorEvent.error?.message || 'Unknown'}`, 4000);
         this.isRecording = false;
-        if (this.recordedAudioURL) {
-            URL.revokeObjectURL(this.recordedAudioURL);
-            this.recordedAudioURL = null;
-        }
+        this.isConverting = false; // Stop conversion if recording errors out
+        if (this.recordedAudioURL_WebM) URL.revokeObjectURL(this.recordedAudioURL_WebM);
+        if (this.recordedAudioURL_WAV) URL.revokeObjectURL(this.recordedAudioURL_WAV);
+        this.recordedAudioURL_WebM = null;
+        this.recordedAudioURL_WAV = null;
         this.recordedChunks = [];
         this.requestUpdate();
     };
@@ -766,27 +794,37 @@ class PromptDjMidi extends LitElement {
   private stopIndependentRecording() {
     if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
       this.mediaRecorder.stop();
-      // The onstop handler will set isRecording = false and update UI
     } else {
-      // This case should ideally not be hit if isRecording is true
       this.isRecording = false; 
+      this.isConverting = false; // If somehow stop is called without active recording
       this.toastMessage.show("Recording was not active or already stopped.", 2000);
       this.requestUpdate();
     }
   }
-  // --- END OF NEW INDEPENDENT RECORDING ---
-
 
   private triggerDownload(url: string | null, filename: string) { if (!url) { this.toastMessage.show("No recording data to download.", 3000); return; } const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
-  private handleDownloadRecording() { 
-      if (!this.recordedAudioURL) { this.toastMessage.show("No recording available to download.", 3000); return; }
-      // Prevent download if recording is somehow still marked active but URL exists (should not happen with current logic)
-      if (this.isRecording) { this.toastMessage.show("Please stop recording before downloading.", 3000); return;}
-
-      const filename = `PromptDJ_Recording_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.webm`; 
-      this.triggerDownload(this.recordedAudioURL, filename); 
-      this.toastMessage.show(`Downloading: ${filename}`, 3000); 
+  
+  // <<< NEW DOWNLOAD HANDLERS
+  private handleDownloadWebM() {
+    if (!this.recordedAudioURL_WebM) {
+      this.toastMessage.show("No WebM recording available.", 3000);
+      return;
     }
+    const filename = `PromptDJ_Recording_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.webm`;
+    this.triggerDownload(this.recordedAudioURL_WebM, filename);
+    this.toastMessage.show(`Downloading WebM: ${filename}`, 3000);
+  }
+
+  private handleDownloadWAV() {
+    if (!this.recordedAudioURL_WAV) {
+      this.toastMessage.show("WAV recording not ready or conversion failed.", 3000);
+      return;
+    }
+    const filename = `PromptDJ_Recording_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.wav`;
+    this.triggerDownload(this.recordedAudioURL_WAV, filename);
+    this.toastMessage.show(`Downloading WAV: ${filename}`, 3000);
+  }
+  // END OF NEW DOWNLOAD HANDLERS
 
   private async refreshMidiDeviceList() { 
     try { const inputIds = await this.midiDispatcher.getMidiAccess(); this.midiInputIds = inputIds; let newActiveId = this.activeMidiInputId; if (this.activeMidiInputId && !inputIds.includes(this.activeMidiInputId)) { newActiveId = inputIds.length > 0 ? inputIds[0] : null; this.toastMessage.show(newActiveId ? `MIDI changed to ${this.midiDispatcher.getDeviceName(newActiveId)}` : "Active MIDI disconnected.", 3000); } else if (!this.activeMidiInputId && inputIds.length > 0) { newActiveId = inputIds[0];  } else if (inputIds.length === 0) { newActiveId = null; } if (newActiveId !== this.activeMidiInputId) { this.activeMidiInputId = newActiveId; } this.midiDispatcher.activeMidiInputId = this.activeMidiInputId;  this.requestUpdate(); 
@@ -867,6 +905,17 @@ class PromptDjMidi extends LitElement {
   }
   private resetAllKnobsToDefault() { if (confirm("Reset all knobs to default? This won't affect saved presets.")) { const defaultPromptsMap = buildDefaultPrompts(); this.setPrompts(defaultPromptsMap, true);  this.activePresetName = null;  this.filteredPrompts.clear(); this.toastMessage.show("Knobs reset to default.", 2000); this.requestUpdate(); } }
   private isCurrentPresetUnsaved(): boolean { if (!this.activePresetName) return false; const activePresetInStorage = this.namedPresets.find(p => p.name === this.activePresetName); if (!activePresetInStorage) return true;  const currentPromptsArray = Array.from(this.prompts.values()); if (currentPromptsArray.length !== activePresetInStorage.prompts.length) return true; for (let i = 0; i < currentPromptsArray.length; i++) { const pCurrent = currentPromptsArray[i]; const pStored = activePresetInStorage.prompts.find(p => p.promptId === pCurrent.promptId); if (!pStored) return true;  if (pCurrent.text !== pStored.text || Math.abs(pCurrent.weight - pStored.weight) > 0.001 || pCurrent.cc !== pStored.cc || pCurrent.color !== pCurrent.color) { return true;  } } return false;  }
+
+  private async convertWebMToWAV(webmBlob: Blob): Promise<Blob> {
+    try {
+      const arrayBuffer = await webmBlob.arrayBuffer();
+      const wavBlob = await getWaveBlob(new Blob([arrayBuffer]), false);
+      return new Blob([wavBlob], { type: 'audio/wav' });
+    } catch (error) {
+      console.error('WAV conversion failed:', error);
+      throw error;
+    }
+  }
 
   override render() {
     const bgStyle = styleMap({ backgroundImage: this.makeBackground() });
@@ -959,11 +1008,17 @@ class PromptDjMidi extends LitElement {
             </button>
             <button 
                 class="download-recording-button" 
-                @click=${this.handleDownloadRecording}
-                ?disabled=${!this.recordedAudioURL || this.isRecording}
-                title="Download recording"
-                aria-label="Download Recording">
-                Download
+                @click=${this.handleDownloadWebM}
+                ?disabled=${!this.recordedAudioURL_WebM || this.isRecording || this.isConverting}
+                title="Download WebM recording">
+                Download WebM
+            </button>
+            <button 
+                class="download-recording-button" 
+                @click=${this.handleDownloadWAV}
+                ?disabled=${!this.recordedAudioURL_WAV || this.isRecording || this.isConverting}
+                title="Download WAV recording">
+                ${this.isConverting ? 'Converting...' : 'Download WAV'}
             </button>
         </div>
         ${this.activePresetName ? html`
@@ -994,7 +1049,6 @@ class PromptDjMidi extends LitElement {
   }
   private renderSliders() {
     return [...this.prompts.values()].slice(8, 16).map((prompt) => {
-      // Ensure we have enough prompts, otherwise render nothing or placeholders
       if (!prompt) return html``; 
       return html`<prompt-controller
         .promptId=${prompt.promptId} .filtered=${this.filteredPrompts.has(prompt.text)} .cc=${prompt.cc}
@@ -1007,7 +1061,6 @@ class PromptDjMidi extends LitElement {
   }
 }
 
-// (getInitialPromptsFromStorage and buildDefaultPrompts have no changes related to Favorites as they deal with 'Prompt' not 'Preset')
 function getInitialPromptsFromStorage(): Map<string, Prompt> {
   const storedPromptsJson = localStorage.getItem(LOCAL_STORAGE_LAST_ACTIVE_PROMPTS_KEY); const defaultStructure = buildDefaultPrompts();
   if (storedPromptsJson) { try { const storedPromptsArray = JSON.parse(storedPromptsJson) as Prompt[]; const finalPrompts = new Map<string, Prompt>(); const storedMap = new Map(storedPromptsArray.map(p => [p.promptId, p])); defaultStructure.forEach((defaultPrompt, promptId) => { const storedP = storedMap.get(promptId); if (storedP) { finalPrompts.set(promptId, { promptId: defaultPrompt.promptId,  text: typeof storedP.text === 'string' ? storedP.text : defaultPrompt.text, weight: typeof storedP.weight === 'number' ? storedP.weight : defaultPrompt.weight, cc: typeof storedP.cc === 'number' ? storedP.cc : defaultPrompt.cc, color: typeof storedP.color === 'string' ? storedP.color : defaultPrompt.color, }); } else { finalPrompts.set(promptId, {...defaultPrompt}); } }); console.log('Loading last active prompts.', finalPrompts); return finalPrompts; } catch (e) { console.error('Failed to parse stored prompts, using defaults.', e); } }
@@ -1028,9 +1081,7 @@ main(document.body);
 declare global {
   interface Window { webkitAudioContext: typeof AudioContext; } 
   interface HTMLElementTagNameMap { 'prompt-dj-midi': PromptDjMidi; 'prompt-controller': PromptController; 'weight-knob': WeightKnob; 'play-pause-button': PlayPauseButton; 'toast-message': ToastMessage }
-  // interface ErrorEvent { readonly error?: any; } // Kept for other error events if needed
   interface MIDIConnectionEvent extends Event { readonly port: MIDIPort | null; }
-  // Added for MediaRecorder specific events
   interface MediaRecorderErrorEvent extends Event {
     readonly error: DOMException;
   }
