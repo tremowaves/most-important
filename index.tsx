@@ -255,7 +255,7 @@ class WeightKnob extends LitElement {
   }
 }
 
-// Base class for icon buttons. (no changes from original)
+// Base class for icon buttons.
 class IconButton extends LitElement {
   static override styles = css`
     :host { position: relative; display: flex; align-items: center; justify-content: center; pointer-events: none; }
@@ -270,7 +270,7 @@ class IconButton extends LitElement {
   override render() { return html`${this.renderSVG()}<div class="hitbox"></div>`; }
 }
 
-// PlayPauseButton (no changes from original)
+// PlayPauseButton
 @customElement('play-pause-button')
 export class PlayPauseButton extends IconButton {
   @property({ type: String }) playbackState: PlaybackState = 'stopped';
@@ -281,14 +281,14 @@ export class PlayPauseButton extends IconButton {
   override renderIcon() { if (this.playbackState === 'playing') return this.renderPause(); else if (this.playbackState === 'loading') return this.renderLoading(); return this.renderPlay(); }
 }
 
-// MidiDispatcher class (no changes from original)
+// MidiDispatcher class
 class MidiDispatcher extends EventTarget {
   private access: MIDIAccess | null = null; activeMidiInputId: string | null = null; private initialScanDone = false;
   async getMidiAccess(): Promise<string[]> { if (!navigator.requestMIDIAccess) { console.warn('Web MIDI API not supported'); this.dispatchEvent(new CustomEvent('midinotavailable')); return []; } if (!this.access && !this.initialScanDone) { try { this.access = await navigator.requestMIDIAccess({ sysex: false }); this.initialScanDone = true; } catch (error: unknown) { console.error('MIDI access failed:', error); this.dispatchEvent(new CustomEvent('midinotavailable', {detail: error instanceof Error ? error.message : 'Unknown error'})); return []; } this.access.onstatechange = (event: MIDIConnectionEvent) => { if (!event.port) return; console.log('MIDI state changed:', event.port.name, event.port.type, event.port.state); this.dispatchEvent(new CustomEvent('midideviceschange')); }; } if (!this.access) return []; const inputIds = Array.from(this.access.inputs.keys()); for (const input of this.access.inputs.values()) { input.onmidimessage = (event: MIDIMessageEvent) => { if (input.id !== this.activeMidiInputId) return; const { data } = event; if (!data) { console.error('MIDI message has no data'); return; } const statusByte = data[0]; const channel = statusByte & 0x0f; const messageType = statusByte & 0xf0; const isControlChange = messageType === 0xb0; if (!isControlChange) return; const detail: ControlChange = { cc: data[1], value: data[2], channel }; this.dispatchEvent(new CustomEvent<ControlChange>('cc-message', { detail })); }; } return inputIds; }
   getDeviceName(id: string): string | null { if (!this.access) return null; const input = this.access.inputs.get(id); return input ? input.name : null; }
 }
 
-// AudioAnalyser class (no changes from original)
+// AudioAnalyser class
 class AudioAnalyser {
   readonly node: AnalyserNode; private readonly freqData: Uint8Array;
   constructor(context: AudioContext) { this.node = context.createAnalyser(); this.node.fftSize = 256; this.node.smoothingTimeConstant = 0.3; this.freqData = new Uint8Array(this.node.frequencyBinCount); }
@@ -418,7 +418,8 @@ class PromptDjMidi extends LitElement {
       flex-direction: column;
       height: 100vh; /* Full viewport height */
       box-sizing: border-box; 
-      padding-top: 65px; /* Space for the fixed .top-controls-panel */
+      /* Adjust padding-top dynamically or ensure it's enough for the potentially taller top-controls-panel */
+      padding-top: 75px; /* Increased slightly to accommodate potential wrapping in top-controls-panel */
       position: relative; 
       background-color: #111; /* Ensure host bg is set */
       overflow: hidden; /* Prevent scrollbars on host due to internal content */
@@ -440,7 +441,7 @@ class PromptDjMidi extends LitElement {
       flex-wrap: wrap; 
       gap: 12px; /* Gap between groups of controls */
       align-items: flex-start; /* Align groups to top */
-      justify-content: center; /* Center groups if they don't fill width */
+      justify-content: space-between; /* Changed from center to allow more flexible group layout */
       flex-shrink: 0; /* Prevent shrinking */
     }
     #preset-panel-top > div { /* Sections within the preset panel */
@@ -448,7 +449,7 @@ class PromptDjMidi extends LitElement {
       flex-direction: column; 
       gap: 6px; /* Space between controls in a section */
     }
-    #preset-panel-top h4 { /* Re-add for section titles if desired */
+    #preset-panel-top h4 { 
       margin: 0 0 4px 0;
       font-size: 0.9em;
       color: #ddd;
@@ -469,6 +470,10 @@ class PromptDjMidi extends LitElement {
       padding: 6px; background: rgba(0,0,0,0.2); border-radius: 4px;
       text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       max-width: 200px; /* Prevent it from becoming too wide */
+       position: absolute; /* Keep positioning */
+       bottom: -30px;
+       left: 50%;
+       transform: translateX(-50%);
     }
 
 
@@ -494,39 +499,34 @@ class PromptDjMidi extends LitElement {
       box-sizing: border-box;
     }
     #top-knobs-section prompt-controller {
-       height: 12vmin; /* Make knobs relatively small */
+       height: 12vmin; 
        min-height: 90px; max-height: 130px;
     }
     #bottom-sliders-section prompt-controller {
-       height: 28vmin; /* Make sliders taller */
+       height: 28vmin; 
        min-height: 180px; max-height: 250px;
     }
     
+    /* Playback controls section (now part of preset panel) uses general button styling */
     #playback-controls-section {
       display: flex;
-      gap: 8px; /* Adjusted gap for more buttons */
+      gap: 8px; 
       align-items: center;
-      margin-top: 10px; /* Space above play button area */
-      flex-shrink: 0; /* Prevent shrinking */
-      flex-wrap: wrap; /* Allow buttons to wrap if not enough space */
+      /* margin-top: 10px; No longer needed as it's part of a flex group */
+      flex-shrink: 0; 
+      flex-wrap: wrap; 
     }
+    /* Play/pause button icon size */
     play-pause-button { 
-      width: 12vmin; 
-      min-width: 70px; max-width: 100px;
-    }
-    /* Ensure all buttons in playback-controls-section have consistent sizing if needed */
-    #playback-controls-section button {
-        min-width: 80px; /* Example: adjust as needed */
-        padding: 5px 10px; /* Example: adjust as needed */
-    }
-    .download-recording-button { /* Keep specific styling if needed */
-        /* padding: 8px 15px; */ /* from original index.css */
+      /* This is an icon button, specific sizing might be needed if it's different from standard buttons */
+      width: 40px; /* Example size, adjust as needed if it's just the icon */
+      height: 40px;
+      /* If it's a button with text, general button styles should apply */
     }
     
-    /* Hide MIDI select initially if showMidi is false, using Lit's styleMap or direct styling */
-    #midi-device-select[style*="display: none"] {
-        /* This selector might be too specific depending on how Lit applies styleMap */
-        /* It's better to handle visibility in the render method for clarity */
+    #playback-controls-section button {
+        /* min-width: 80px; General button styles will apply */
+        /* padding: 5px 10px; General button styles will apply */
     }
   `;
 
@@ -553,12 +553,10 @@ class PromptDjMidi extends LitElement {
   private mediaRecorder: MediaRecorder | null = null;
   private recordedChunks: Blob[] = [];
   
-  // <<< NEW STATE FOR RECORDING URLS AND CONVERSION STATUS
   @state() private recordedAudioURL_WebM: string | null = null;
   @state() private recordedAudioURL_WAV: string | null = null;
   @state() private isConverting: boolean = false;
-  // END OF NEW STATE
-
+  
   private streamDestination: MediaStreamAudioDestinationNode | null = null;
 
   @state() private namedPresets: Preset[] = [];
@@ -566,6 +564,14 @@ class PromptDjMidi extends LitElement {
   @query('#import-file-input') private importFileInput!: HTMLInputElement;
 
   @query('toast-message') private toastMessage!: ToastMessage;
+
+  // Countdown Timer State
+  @state() private countdownInputMinutes: string = "5";
+  @state() private timeRemainingSeconds: number | null = null;
+  @state() private countdownTotalSeconds: number | null = null; // Initial duration in seconds for timeline
+  @state() private countdownIntervalId: number | null = null;
+  @state() private isCountdownRunning: boolean = false;
+
 
   constructor(initialPrompts: Map<string, Prompt>, midiDispatcher: MidiDispatcher) {
     super();
@@ -615,6 +621,11 @@ class PromptDjMidi extends LitElement {
     if (this.recordedAudioURL_WebM) URL.revokeObjectURL(this.recordedAudioURL_WebM);
     if (this.recordedAudioURL_WAV) URL.revokeObjectURL(this.recordedAudioURL_WAV);
     this.audioContext.close();
+    // Cleanup for countdown timer
+    if (this.countdownIntervalId) {
+        clearInterval(this.countdownIntervalId);
+        this.countdownIntervalId = null;
+    }
   }
 
   private async connectToSession() { 
@@ -702,13 +713,12 @@ class PromptDjMidi extends LitElement {
       return;
     }
 
-    // Clear any previously recorded URLs and reset states
     if (this.recordedAudioURL_WebM) URL.revokeObjectURL(this.recordedAudioURL_WebM);
     if (this.recordedAudioURL_WAV) URL.revokeObjectURL(this.recordedAudioURL_WAV);
     this.recordedAudioURL_WebM = null;
     this.recordedAudioURL_WAV = null;
     this.recordedChunks = [];
-    this.isConverting = false; // Ensure conversion status is reset
+    this.isConverting = false; 
 
     try {
       const options: { mimeType?: string } = { mimeType: 'audio/webm;codecs=opus' };
@@ -733,22 +743,21 @@ class PromptDjMidi extends LitElement {
       }
     };
 
-    this.mediaRecorder.onstop = async () => { // <<< MADE ASYNC FOR AWAIT
+    this.mediaRecorder.onstop = async () => { 
       if (this.recordedChunks.length > 0) {
         const webmBlob = new Blob(this.recordedChunks, { type: this.mediaRecorder?.mimeType || 'audio/webm' });
         
-        // Create URL for WebM
         if (this.recordedAudioURL_WebM) URL.revokeObjectURL(this.recordedAudioURL_WebM);
         this.recordedAudioURL_WebM = URL.createObjectURL(webmBlob);
         
-        this.toastMessage.show("WebM recording finished. Converting to WAV...", 0); // No auto-hide
+        this.toastMessage.show("WebM recording finished. Converting to WAV...", 0); 
         this.isConverting = true;
-        this.recordedAudioURL_WAV = null; // Reset WAV URL while converting
+        this.recordedAudioURL_WAV = null; 
         this.requestUpdate();
 
         try {
-          const wavBlob = await this.convertWebMToWAV(webmBlob); // <<< CONVERSION HAPPENS HERE
-          if (this.recordedAudioURL_WAV) URL.revokeObjectURL(this.recordedAudioURL_WAV); // Should be null
+          const wavBlob = await this.convertWebMToWAV(webmBlob); 
+          if (this.recordedAudioURL_WAV) URL.revokeObjectURL(this.recordedAudioURL_WAV); 
           this.recordedAudioURL_WAV = URL.createObjectURL(wavBlob);
           this.toastMessage.show("Conversion to WAV complete. Downloads ready.", 4000);
         } catch (error) {
@@ -760,7 +769,6 @@ class PromptDjMidi extends LitElement {
           this.requestUpdate();
         }
       } else {
-        // No data recorded, clear any existing URLs
         if (this.recordedAudioURL_WebM) URL.revokeObjectURL(this.recordedAudioURL_WebM);
         if (this.recordedAudioURL_WAV) URL.revokeObjectURL(this.recordedAudioURL_WAV);
         this.recordedAudioURL_WebM = null;
@@ -776,7 +784,7 @@ class PromptDjMidi extends LitElement {
         console.error("MediaRecorder error:", errorEvent.error);
         this.toastMessage.show(`Recording error: ${errorEvent.error?.name} - ${errorEvent.error?.message || 'Unknown'}`, 4000);
         this.isRecording = false;
-        this.isConverting = false; // Stop conversion if recording errors out
+        this.isConverting = false; 
         if (this.recordedAudioURL_WebM) URL.revokeObjectURL(this.recordedAudioURL_WebM);
         if (this.recordedAudioURL_WAV) URL.revokeObjectURL(this.recordedAudioURL_WAV);
         this.recordedAudioURL_WebM = null;
@@ -796,7 +804,7 @@ class PromptDjMidi extends LitElement {
       this.mediaRecorder.stop();
     } else {
       this.isRecording = false; 
-      this.isConverting = false; // If somehow stop is called without active recording
+      this.isConverting = false; 
       this.toastMessage.show("Recording was not active or already stopped.", 2000);
       this.requestUpdate();
     }
@@ -804,7 +812,6 @@ class PromptDjMidi extends LitElement {
 
   private triggerDownload(url: string | null, filename: string) { if (!url) { this.toastMessage.show("No recording data to download.", 3000); return; } const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
   
-  // <<< NEW DOWNLOAD HANDLERS
   private handleDownloadWebM() {
     if (!this.recordedAudioURL_WebM) {
       this.toastMessage.show("No WebM recording available.", 3000);
@@ -824,7 +831,6 @@ class PromptDjMidi extends LitElement {
     this.triggerDownload(this.recordedAudioURL_WAV, filename);
     this.toastMessage.show(`Downloading WAV: ${filename}`, 3000);
   }
-  // END OF NEW DOWNLOAD HANDLERS
 
   private async refreshMidiDeviceList() { 
     try { const inputIds = await this.midiDispatcher.getMidiAccess(); this.midiInputIds = inputIds; let newActiveId = this.activeMidiInputId; if (this.activeMidiInputId && !inputIds.includes(this.activeMidiInputId)) { newActiveId = inputIds.length > 0 ? inputIds[0] : null; this.toastMessage.show(newActiveId ? `MIDI changed to ${this.midiDispatcher.getDeviceName(newActiveId)}` : "Active MIDI disconnected.", 3000); } else if (!this.activeMidiInputId && inputIds.length > 0) { newActiveId = inputIds[0];  } else if (inputIds.length === 0) { newActiveId = null; } if (newActiveId !== this.activeMidiInputId) { this.activeMidiInputId = newActiveId; } this.midiDispatcher.activeMidiInputId = this.activeMidiInputId;  this.requestUpdate(); 
@@ -917,6 +923,71 @@ class PromptDjMidi extends LitElement {
     }
   }
 
+  // --- Countdown Timer Methods ---
+  private handleCountdownInputChange(e: Event) {
+    const inputEl = e.target as HTMLInputElement;
+    this.countdownInputMinutes = inputEl.value;
+    if (!this.isCountdownRunning) {
+        this.timeRemainingSeconds = null; 
+        this.countdownTotalSeconds = null;
+    }
+    this.requestUpdate();
+  }
+
+  private toggleCountdown() {
+    if (this.isCountdownRunning) {
+        // Stop the countdown
+        if (this.countdownIntervalId) {
+            clearInterval(this.countdownIntervalId);
+            this.countdownIntervalId = null;
+        }
+        this.isCountdownRunning = false;
+    } else {
+        // Start the countdown
+        const duration = parseInt(this.countdownInputMinutes, 10);
+        if (isNaN(duration) || duration <= 0) {
+            this.toastMessage.show("Please enter a valid duration in minutes.", 3000);
+            this.countdownInputMinutes = (this.countdownTotalSeconds !== null && this.countdownTotalSeconds > 0) ? (this.countdownTotalSeconds/60).toString() : "5";
+            this.timeRemainingSeconds = null; // Reset display if invalid
+            this.countdownTotalSeconds = null;
+            return;
+        }
+        this.countdownTotalSeconds = duration * 60;
+        this.timeRemainingSeconds = this.countdownTotalSeconds;
+        this.isCountdownRunning = true;
+
+        this.countdownIntervalId = window.setInterval(() => {
+            if (this.timeRemainingSeconds !== null && this.timeRemainingSeconds > 0) {
+                this.timeRemainingSeconds -= 1;
+            } else {
+                if (this.countdownIntervalId) clearInterval(this.countdownIntervalId);
+                this.countdownIntervalId = null;
+                this.isCountdownRunning = false;
+                this.timeRemainingSeconds = 0; 
+                this.toastMessage.show("Time's up!", 4000);
+            }
+            this.requestUpdate();
+        }, 1000);
+    }
+    this.requestUpdate();
+  }
+
+  private formatTimeDisplay(totalSeconds: number | null): string {
+    if (totalSeconds === null) {
+        // If not running and no previous time, show based on input
+        const parsedInput = parseInt(this.countdownInputMinutes, 10);
+        if (!isNaN(parsedInput) && parsedInput > 0) {
+            return `${String(parsedInput).padStart(2, '0')}:00`;
+        }
+        return "--:--";
+    }
+    if (totalSeconds < 0) totalSeconds = 0; 
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+
+
   override render() {
     const bgStyle = styleMap({ backgroundImage: this.makeBackground() });
     const currentPresetIsModified = this.isCurrentPresetUnsaved();
@@ -934,16 +1005,36 @@ class PromptDjMidi extends LitElement {
         ? `${activePresetIsFavorite ? '⭐ ' : ''}${this.activePresetName}${currentPresetIsModified ? "*" : ""}`
         : "Load Preset...";
 
+    let progressPercent = 100;
+    if (this.isCountdownRunning && this.timeRemainingSeconds !== null && this.countdownTotalSeconds !== null && this.countdownTotalSeconds > 0) {
+        progressPercent = Math.max(0, (this.timeRemainingSeconds / this.countdownTotalSeconds) * 100);
+    } else if (!this.isCountdownRunning && this.timeRemainingSeconds === 0 && this.countdownTotalSeconds !== null) { // Timer finished
+        progressPercent = 0;
+    } else if (!this.isCountdownRunning && this.timeRemainingSeconds !== null && this.countdownTotalSeconds !== null && this.timeRemainingSeconds < this.countdownTotalSeconds) { // Timer stopped mid-way
+        progressPercent = Math.max(0, (this.timeRemainingSeconds / this.countdownTotalSeconds) * 100);
+    } else if (this.timeRemainingSeconds === null && this.countdownTotalSeconds === null) { // Initial state or after invalid input
+         const parsedInput = parseInt(this.countdownInputMinutes, 10);
+         if (isNaN(parsedInput) || parsedInput <=0 ) {
+             progressPercent = 0; // Show empty if input is bad or timer not set
+         } else {
+             progressPercent = 100; // Ready to start at full if valid input
+         }
+    } else if (this.timeRemainingSeconds !== null && this.countdownTotalSeconds !== null && this.timeRemainingSeconds >= this.countdownTotalSeconds) {
+        progressPercent = 100; 
+    }
+
+
     return html`
       <div id="background" style=${bgStyle}></div>
       <toast-message></toast-message>
       
-      <!-- MIDI Controls Panel (Fixed Top) -->
-      <div class="top-controls-panel" role="toolbar" aria-label="MIDI Controls">
+      <!-- Controls Panel (Fixed Top) -->
+      <div class="top-controls-panel" role="toolbar" aria-label="Top Controls">
+        <!-- MIDI Controls Group -->
         <div>
           <button 
             @click=${this.toggleShowMidi} 
-            class=${this.showMidi ? 'active' : ''} 
+            class=${classMap({active: this.showMidi})}
             aria-pressed=${this.showMidi} 
             aria-label="Toggle MIDI Controls">MIDI
           </button>
@@ -966,6 +1057,29 @@ class PromptDjMidi extends LitElement {
                   )}
                 `}
           </select>
+        </div>
+
+        <!-- Timer Controls Group -->
+        <div class="timer-group">
+          <label for="countdown-duration">Timer (min):</label>
+          <input
+            type="number"
+            id="countdown-duration"
+            .value=${this.countdownInputMinutes}
+            @input=${this.handleCountdownInputChange}
+            min="1"
+            ?disabled=${this.isCountdownRunning}
+            aria-label="Countdown duration in minutes"
+          />
+          <button @click=${this.toggleCountdown} aria-label=${this.isCountdownRunning ? 'Stop timer' : 'Start timer'}>
+            ${this.isCountdownRunning ? 'Stop' : 'Start'}
+          </button>
+          <span class="time-display" aria-live="polite" aria-atomic="true">
+            ${this.formatTimeDisplay(this.timeRemainingSeconds)}
+          </span>
+          <div class="timeline-container" title="Time remaining">
+            <div class="timeline-progress" style="width: ${progressPercent}%" role="progressbar" aria-valuenow=${progressPercent} aria-valuemin="0" aria-valuemax="100"></div>
+          </div>
         </div>
       </div>
       
@@ -996,7 +1110,7 @@ class PromptDjMidi extends LitElement {
         </div>
         <div id="playback-controls-section">
             <h4>Playback & Record</h4>
-            <button @click=${this.handlePlayPause} title="Play/Pause music" aria-label="Play/Pause">
+            <button @click=${this.handlePlayPause} title=${this.playbackState === 'playing' ? "Pause music" : "Play music"} aria-label="Play/Pause Music">
                 ${this.playbackState === 'playing' ? 'Pause' : this.playbackState === 'loading' ? 'Loading...' : 'Play'}
             </button>
             <button 

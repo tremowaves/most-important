@@ -12,6 +12,10 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      server: {
+        host: true, // Cho phép truy cập từ mạng
+        port: 5173
       }
     };
 });
