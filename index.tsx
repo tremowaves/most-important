@@ -972,19 +972,59 @@ class PromptDjMidi extends LitElement {
     this.requestUpdate();
   }
 
-  private formatTimeDisplay(totalSeconds: number | null): string {
-    if (totalSeconds === null) {
-        // If not running and no previous time, show based on input
-        const parsedInput = parseInt(this.countdownInputMinutes, 10);
-        if (!isNaN(parsedInput) && parsedInput > 0) {
-            return `${String(parsedInput).padStart(2, '0')}:00`;
+  private formatTimeDisplay(): string {
+    let mmssDisplay = "--:--";
+    let percentValue: number | null = null;
+
+    // Determine MM:SS display
+    // Case 1: Timer is not running, and no time remaining (initial state or reset after invalid input)
+    if (!this.isCountdownRunning && this.timeRemainingSeconds === null) {
+        const parsedInputMinutes = parseInt(this.countdownInputMinutes, 10);
+        if (!isNaN(parsedInputMinutes) && parsedInputMinutes > 0) {
+            mmssDisplay = `${String(parsedInputMinutes).padStart(2, '0')}:00`;
+            // If countdownTotalSeconds is also not set (true initial state), assume 100% for the preview
+            if (this.countdownTotalSeconds === null) {
+                percentValue = 100;
+            } else if (this.countdownTotalSeconds > 0) {
+            // If total was set from a previous run, calculate preview % based on current input
+                 percentValue = Math.max(0, Math.min(100, ((parsedInputMinutes * 60) / this.countdownTotalSeconds) * 100));
+            } else { // countdownTotalSeconds is 0 or invalid
+                percentValue = (parsedInputMinutes > 0) ? 100 : 0; // if input minutes > 0, show 100, else 0
+            }
         }
-        return "--:--";
     }
-    if (totalSeconds < 0) totalSeconds = 0; 
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    // Case 2: Timer has/is running or is paused (timeRemainingSeconds is not null)
+    else if (this.timeRemainingSeconds !== null) {
+        let currentSeconds = this.timeRemainingSeconds;
+        if (currentSeconds < 0) currentSeconds = 0;
+        const minutes = Math.floor(currentSeconds / 60);
+        const seconds = currentSeconds % 60;
+        mmssDisplay = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    // Determine Percentage, favoring live data if timer is running or has run
+    if (this.countdownTotalSeconds !== null && this.countdownTotalSeconds > 0 && this.timeRemainingSeconds !== null) {
+        percentValue = Math.max(0, (this.timeRemainingSeconds / this.countdownTotalSeconds) * 100);
+    } else if (this.timeRemainingSeconds === 0 && this.countdownTotalSeconds !== null) { // Explicitly finished or 0 input
+        percentValue = 0;
+    }
+    // If percentValue is still null (e.g. initial state with invalid input, or if it wasn't set above)
+    // and we based mmssDisplay on a valid input, reflect that as 100%
+    else if (percentValue === null && !this.isCountdownRunning && this.timeRemainingSeconds === null) {
+        const parsedInputMinutes = parseInt(this.countdownInputMinutes, 10);
+        if (!isNaN(parsedInputMinutes) && parsedInputMinutes > 0) {
+             if (this.countdownTotalSeconds === null || (this.countdownTotalSeconds > 0 && (parsedInputMinutes * 60) >= this.countdownTotalSeconds) ){
+                percentValue = 100;
+             } else if (this.countdownTotalSeconds === 0){
+                percentValue = 0;
+             }
+        }
+    }
+
+    if (percentValue !== null) {
+        return `${mmssDisplay} (${Math.round(percentValue)}%)`;
+    }
+    return mmssDisplay; // Fallback to only MM:SS if percent cannot be determined or is not applicable
   }
 
 
@@ -1075,7 +1115,7 @@ class PromptDjMidi extends LitElement {
             ${this.isCountdownRunning ? 'Stop' : 'Start'}
           </button>
           <span class="time-display" aria-live="polite" aria-atomic="true">
-            ${this.formatTimeDisplay(this.timeRemainingSeconds)}
+            ${this.formatTimeDisplay()}
           </span>
           <div class="timeline-container" title="Time remaining">
             <div class="timeline-progress" style="width: ${progressPercent}%" role="progressbar" aria-valuenow=${progressPercent} aria-valuemin="0" aria-valuemax="100"></div>
