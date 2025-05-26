@@ -503,7 +503,7 @@ class PromptDjMidi extends LitElement {
     
     #playback-controls-section {
       display: flex;
-      gap: 20px;
+      gap: 10px; /* Adjusted gap for more buttons */
       align-items: center;
       margin-top: 10px; /* Space above play button area */
       flex-shrink: 0; /* Prevent shrinking */
@@ -512,8 +512,10 @@ class PromptDjMidi extends LitElement {
       width: 12vmin; 
       min-width: 70px; max-width: 100px;
     }
-    .download-recording-button { /* Already styled in index.css, ensure consistency or override */
-        margin-top: 0; /* Override if any from index.css for this specific placement */
+    /* Ensure all buttons in playback-controls-section have consistent sizing if needed */
+    #playback-controls-section button {
+        min-width: 80px; /* Example: adjust as needed */
+        padding: 5px 10px; /* Example: adjust as needed */
     }
     
     /* Hide MIDI select initially if showMidi is false, using Lit's styleMap or direct styling */
@@ -547,7 +549,7 @@ class PromptDjMidi extends LitElement {
   private recordedChunks: Blob[] = [];
   @state() private recordedAudioURL: string | null = null;
   private streamDestination: MediaStreamAudioDestinationNode | null = null;
-  private _justPausedForAutoDownload = false;
+  // private _justPausedForAutoDownload = false; // REMOVED - No longer needed
 
   @state() private namedPresets: Preset[] = [];
   @state() private activePresetName: string | null = null;
@@ -576,7 +578,10 @@ class PromptDjMidi extends LitElement {
     this.outputNode.connect(this.audioAnalyser.node);
     this.outputNode.connect(this.audioContext.destination);
     if (this.audioContext.state === 'suspended') { this.audioContext.resume(); }
-    if (!this.streamDestination) { this.streamDestination = this.audioContext.createMediaStreamDestination(); }
+    // Ensure streamDestination is created and connected for recording
+    if (!this.streamDestination) { 
+        this.streamDestination = this.audioContext.createMediaStreamDestination(); 
+    }
     this.outputNode.connect(this.streamDestination);
   }
 
@@ -594,6 +599,10 @@ class PromptDjMidi extends LitElement {
     if (this.audioLevelRafId) cancelAnimationFrame(this.audioLevelRafId);
     this.midiDispatcher.removeEventListener('midideviceschange', this.handleMidiDevicesChange.bind(this));
     this.session?.close();
+    // Stop recording if active when component is disconnected
+    if (this.isRecording && this.mediaRecorder && this.mediaRecorder.state === "recording") {
+        this.mediaRecorder.stop();
+    }
     this.audioContext.close();
   }
 
@@ -646,21 +655,23 @@ class PromptDjMidi extends LitElement {
     if (this.connectionError) { this.toastMessage.show('Reconnecting before playing...', 2000); await this.connectToSession(); if (this.connectionError) { this.toastMessage.show('Connection failed. Cannot play.', 3000); this.playbackState = 'stopped';  return; } }
     const promptsToSend = this.getPromptsToSend(); if (promptsToSend.length === 0) { this.toastMessage.show('Turn up a knob!', 3000); this.playbackState = 'paused';  return; }
     this.playbackState = 'loading';  this.outputNode.gain.setValueAtTime(0, this.audioContext.currentTime);  this.outputNode.gain.linearRampToValueAtTime(1, this.audioContext.currentTime + 0.2);
-    await this.setSessionPrompts();  this.session.play();  this.startRecording();
+    await this.setSessionPrompts();
+    this.session.play();
+    // REMOVED: this.startRecording(); 
   }
 
   private pause() { 
     if (this.playbackState !== 'playing' && this.playbackState !== 'loading') return;
     this.session?.pause();  this.outputNode.gain.setValueAtTime(this.outputNode.gain.value, this.audioContext.currentTime); this.outputNode.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + 0.2); 
-    const oldPlaybackState = this.playbackState; this.playbackState = 'paused';
-    if ((oldPlaybackState === 'playing' || oldPlaybackState === 'loading') && this.mediaRecorder && this.mediaRecorder.state === "recording") { this._justPausedForAutoDownload = true; }
-    this.stopRecordingAndOfferDownload(); this.nextStartTime = 0; 
+    this.playbackState = 'paused';
+    // REMOVED: Auto-download logic
+    this.nextStartTime = 0; 
   }
 
-  private stop(isErrorStop: boolean = false) { 
+  private stop(isErrorStop: boolean = false) { // Parameter isErrorStop is kept for context but not used for recording logic
     this.session?.stop(); this.outputNode.gain.setValueAtTime(this.outputNode.gain.value, this.audioContext.currentTime); this.outputNode.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + 0.1);
     this.playbackState = 'stopped'; this.nextStartTime = 0; 
-    if (!isErrorStop) {  this.stopRecordingAndOfferDownload(); } else { this.stopRecordingCleanup();  }
+    // REMOVED: Old recording stop logic
   }
 
   private async handlePlayPause() { 
@@ -668,24 +679,114 @@ class PromptDjMidi extends LitElement {
     switch (this.playbackState) { case 'playing': this.pause(); break; case 'paused': case 'stopped': await this.play(); break; case 'loading':  this.stop(); break; }
   }
 
-  private startRecording() { 
-    if (!this.streamDestination) { console.error("Stream dest not available"); this.toastMessage.show("Error: Cannot start recording.", 3000); return; }
-    if (this.mediaRecorder && this.mediaRecorder.state === "recording") { this.mediaRecorder.stop();  }
-    this.recordedChunks = []; if (this.recordedAudioURL) { URL.revokeObjectURL(this.recordedAudioURL); } this.recordedAudioURL = null; 
-    try { const options: { mimeType?: string } = { mimeType: 'audio/webm;codecs=opus' };  if (!MediaRecorder.isTypeSupported(options.mimeType || '')) { console.warn(`${options.mimeType} not supported, trying default.`); delete options.mimeType;  } this.mediaRecorder = new MediaRecorder(this.streamDestination.stream, options); } catch (e: unknown) { console.error("MediaRecorder setup failed:", e); this.toastMessage.show(`Rec setup failed: ${e instanceof Error ? e.message : 'Unknown'}`, 4000); return; }
-    this.mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) this.recordedChunks.push(event.data); };
-    this.mediaRecorder.onstop = () => {
-      if (this.recordedChunks.length > 0) { const blob = new Blob(this.recordedChunks, { type: this.mediaRecorder?.mimeType || 'audio/webm' }); if (this.recordedAudioURL) URL.revokeObjectURL(this.recordedAudioURL); this.recordedAudioURL = URL.createObjectURL(blob); if (this._justPausedForAutoDownload) { this.triggerDownload(this.recordedAudioURL, `PromptDJ_Paused_Rec_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.webm`); this.toastMessage.show("Recording auto-downloaded.", 3000); this._justPausedForAutoDownload = false;  } else { this.toastMessage.show("Recording finished. Download is available.", 3000); }
-      } else { if (this.recordedAudioURL) URL.revokeObjectURL(this.recordedAudioURL); this.recordedAudioURL = null;  } this.isRecording = false;
-    };
-    this.mediaRecorder.onerror = (event: ErrorEvent) => { console.error("MediaRecorder error:", event); this.toastMessage.show(`Rec error: ${event.error?.message || 'Unknown'}`, 4000); this.isRecording = false; if (this.recordedAudioURL) URL.revokeObjectURL(this.recordedAudioURL); this.recordedAudioURL = null; };
-    this.mediaRecorder.start(); this.isRecording = true; this.toastMessage.show("Recording started...", 2000);
+  // --- NEW INDEPENDENT RECORDING ---
+  private handleToggleRecording() {
+    if (this.isRecording) {
+      this.stopIndependentRecording();
+    } else {
+      this.startIndependentRecording();
+    }
   }
 
-  private stopRecordingAndOfferDownload() { if (this.mediaRecorder && this.mediaRecorder.state === "recording") { this.mediaRecorder.stop(); } }
-  private stopRecordingCleanup() { if (this.mediaRecorder && this.mediaRecorder.state === "recording") { this.mediaRecorder.ondataavailable = null; this.mediaRecorder.onstop = null; this.mediaRecorder.stop(); } this.isRecording = false; this.recordedChunks = []; if (this.recordedAudioURL) { URL.revokeObjectURL(this.recordedAudioURL);  this.recordedAudioURL = null; } }
+  private startIndependentRecording() {
+    if (!this.streamDestination) {
+      console.error("Stream destination not available for recording.");
+      this.toastMessage.show("Error: Cannot start recording. Audio setup issue.", 3000);
+      return;
+    }
+
+    // Clear any previously recorded URL and chunks
+    if (this.recordedAudioURL) {
+      URL.revokeObjectURL(this.recordedAudioURL);
+      this.recordedAudioURL = null;
+    }
+    this.recordedChunks = [];
+
+    try {
+      const options: { mimeType?: string } = { mimeType: 'audio/webm;codecs=opus' };
+      if (!MediaRecorder.isTypeSupported(options.mimeType || '')) {
+        console.warn(`${options.mimeType} not supported, trying default audio/webm.`);
+        options.mimeType = 'audio/webm'; // Fallback to generic webm if opus isn't supported
+         if (!MediaRecorder.isTypeSupported(options.mimeType || '')) {
+            console.warn(`${options.mimeType} also not supported, trying browser default.`);
+            delete options.mimeType;
+         }
+      }
+      this.mediaRecorder = new MediaRecorder(this.streamDestination.stream, options);
+    } catch (e: unknown) {
+      console.error("MediaRecorder setup failed:", e);
+      this.toastMessage.show(`Recording setup failed: ${e instanceof Error ? e.message : 'Unknown'}`, 4000);
+      return;
+    }
+
+    this.mediaRecorder.ondataavailable = (event: BlobEvent) => {
+      if (event.data.size > 0) {
+        this.recordedChunks.push(event.data);
+      }
+    };
+
+    this.mediaRecorder.onstop = () => {
+      if (this.recordedChunks.length > 0) {
+        const blob = new Blob(this.recordedChunks, { type: this.mediaRecorder?.mimeType || 'audio/webm' });
+        if (this.recordedAudioURL) { // Revoke old URL if it exists
+          URL.revokeObjectURL(this.recordedAudioURL);
+        }
+        this.recordedAudioURL = URL.createObjectURL(blob);
+        this.toastMessage.show("Recording finished. Download is available.", 3000);
+      } else {
+        if (this.recordedAudioURL) {
+          URL.revokeObjectURL(this.recordedAudioURL);
+          this.recordedAudioURL = null;
+        }
+        this.toastMessage.show("Recording stopped. No audio data captured.", 3000);
+      }
+      this.isRecording = false;
+      this.requestUpdate(); 
+    };
+
+    this.mediaRecorder.onerror = (event: Event) => { // Standard Event, check specific error event type if needed
+        const errorEvent = event as MediaRecorderErrorEvent; // More specific type
+        console.error("MediaRecorder error:", errorEvent.error);
+        this.toastMessage.show(`Recording error: ${errorEvent.error?.name} - ${errorEvent.error?.message || 'Unknown'}`, 4000);
+        this.isRecording = false;
+        if (this.recordedAudioURL) {
+            URL.revokeObjectURL(this.recordedAudioURL);
+            this.recordedAudioURL = null;
+        }
+        this.recordedChunks = [];
+        this.requestUpdate();
+    };
+    
+    this.mediaRecorder.start();
+    this.isRecording = true;
+    this.toastMessage.show("Recording started...", 2000);
+    this.requestUpdate();
+  }
+
+  private stopIndependentRecording() {
+    if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
+      this.mediaRecorder.stop();
+      // The onstop handler will set isRecording = false and update UI
+    } else {
+      // This case should ideally not be hit if isRecording is true
+      this.isRecording = false; 
+      this.toastMessage.show("Recording was not active or already stopped.", 2000);
+      this.requestUpdate();
+    }
+  }
+  // --- END OF NEW INDEPENDENT RECORDING ---
+
+
   private triggerDownload(url: string | null, filename: string) { if (!url) { this.toastMessage.show("No recording data to download.", 3000); return; } const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
-  private handleDownloadRecording() { if (!this.recordedAudioURL) { this.toastMessage.show("No recording available.", 3000); return; } const filename = `PromptDJ_Recording_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.webm`; this.triggerDownload(this.recordedAudioURL, filename); this.toastMessage.show(`Downloading: ${filename}`, 3000); }
+  private handleDownloadRecording() { 
+      if (!this.recordedAudioURL) { this.toastMessage.show("No recording available to download.", 3000); return; }
+      // Prevent download if recording is somehow still marked active but URL exists (should not happen with current logic)
+      if (this.isRecording) { this.toastMessage.show("Please stop recording before downloading.", 3000); return;}
+
+      const filename = `PromptDJ_Recording_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.webm`; 
+      this.triggerDownload(this.recordedAudioURL, filename); 
+      this.toastMessage.show(`Downloading: ${filename}`, 3000); 
+    }
 
   private async refreshMidiDeviceList() { 
     try { const inputIds = await this.midiDispatcher.getMidiAccess(); this.midiInputIds = inputIds; let newActiveId = this.activeMidiInputId; if (this.activeMidiInputId && !inputIds.includes(this.activeMidiInputId)) { newActiveId = inputIds.length > 0 ? inputIds[0] : null; this.toastMessage.show(newActiveId ? `MIDI changed to ${this.midiDispatcher.getDeviceName(newActiveId)}` : "Active MIDI disconnected.", 3000); } else if (!this.activeMidiInputId && inputIds.length > 0) { newActiveId = inputIds[0];  } else if (inputIds.length === 0) { newActiveId = null; } if (newActiveId !== this.activeMidiInputId) { this.activeMidiInputId = newActiveId; } this.midiDispatcher.activeMidiInputId = this.activeMidiInputId;  this.requestUpdate(); 
@@ -823,7 +924,6 @@ class PromptDjMidi extends LitElement {
       <div id="preset-panel-top" role="navigation" aria-label="Preset Controls">
         <div>
           <h4>Presets</h4>
-          <label for="preset-load-select">Load:</label>
           <select id="preset-load-select" @change=${this.handleLoadPreset} .value=${this.activePresetName || ""} aria-label="Load Preset">
               <option value="" ?selected=${!this.activePresetName} disabled>${placeholderOptionLabel}</option>
               ${sortedPresetOptions.map(p => html`<option value=${p.name} ?selected=${p.name === this.activePresetName}>${p.isFavorite ? '⭐ ' : ''}${p.name}</option>`)}
@@ -846,14 +946,21 @@ class PromptDjMidi extends LitElement {
             <button @click=${this.resetAllKnobsToDefault} title="Reset all knobs to default values" aria-label="Reset Knobs">Reset All</button>
         </div>
         <div id="playback-controls-section">
-            <h4>Playback</h4>
+            <h4>Playback & Record</h4>
             <button @click=${this.handlePlayPause} title="Play/Pause music" aria-label="Play/Pause">
-                ${this.playbackState === 'playing' ? 'Pause' : 'Play'}
+                ${this.playbackState === 'playing' ? 'Pause' : this.playbackState === 'loading' ? 'Loading...' : 'Play'}
+            </button>
+            <button 
+                @click=${this.handleToggleRecording}
+                class=${classMap({ active: this.isRecording})}
+                title=${this.isRecording ? "Stop Recording" : "Start Recording"}
+                aria-label=${this.isRecording ? "Stop Recording" : "Start Recording"}>
+                ${this.isRecording ? 'Stop Rec' : 'Record'}
             </button>
             <button 
                 class="download-recording-button" 
                 @click=${this.handleDownloadRecording}
-                ?disabled=${!this.recordedAudioURL}
+                ?disabled=${!this.recordedAudioURL || this.isRecording}
                 title="Download recording"
                 aria-label="Download Recording">
                 Download
@@ -921,6 +1028,14 @@ main(document.body);
 declare global {
   interface Window { webkitAudioContext: typeof AudioContext; } 
   interface HTMLElementTagNameMap { 'prompt-dj-midi': PromptDjMidi; 'prompt-controller': PromptController; 'weight-knob': WeightKnob; 'play-pause-button': PlayPauseButton; 'toast-message': ToastMessage }
-  interface ErrorEvent { readonly error?: any; }
+  // interface ErrorEvent { readonly error?: any; } // Kept for other error events if needed
   interface MIDIConnectionEvent extends Event { readonly port: MIDIPort | null; }
+  // Added for MediaRecorder specific events
+  interface MediaRecorderErrorEvent extends Event {
+    readonly error: DOMException;
+  }
+  interface BlobEvent extends Event {
+    readonly data: Blob;
+    readonly timecode: DOMHighResTimeStamp;
+  }
 }
