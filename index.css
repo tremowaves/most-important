@@ -199,49 +199,30 @@ input[type="file"] {
 @media (max-width: 768px) {
   .top-controls-panel {
     flex-direction: column;
-    align-items: stretch; /* Make control groups take full width */
+    align-items: stretch;
   }
   
-  .top-controls-panel > div { /* Each control group */
+  .top-controls-panel > div {
     width: 100%;
-    justify-content: space-between; /* Distribute items within the group */
+    justify-content: flex-start; /* Thay đổi từ space-between */
+    gap: 8px; /* Thêm gap giữa các items */
   }
   
-  .top-controls-panel button, .top-controls-panel select, .top-controls-panel .timer-group input[type="number"] {
-    flex-grow: 1; /* Allow items to grow if space-between is used */
-    min-width: 80px; /* Ensure items are not too small */
+  .top-controls-panel button,
+  .top-controls-panel select,
+  .top-controls-panel .timer-group input[type="number"] {
+    flex: 0 1 auto; /* Thay đổi từ flex-grow: 1 */
+    min-width: 80px;
   }
+  
   .top-controls-panel .timer-group .timeline-container {
-    flex-grow: 2; /* Allow timeline to take more space if available */
+    flex: 1 1 auto; /* Thay đổi từ flex-grow: 2 */
+    min-width: 120px;
   }
 }
 
 #preset-panel-top {
-  padding: 8px 12px;
-  background: rgba(30, 30, 50, 0.93); /* Darker, deeper blue/purple */
-  backdrop-filter: blur(5px);
-  border-bottom: 1px solid rgba(80, 80, 120, 0.35);
-  display: flex;
-  flex-wrap: wrap; 
-  gap: 12px;
-  align-items: flex-start;
-  justify-content: space-between;
-  flex-shrink: 0;
-  position: relative;
-  z-index: 100;
-}
-
-#preset-panel-top h4 { 
-  margin: 0 0 4px 0;
-  font-size: 0.9em;
-  color: #b0c4de; /* LightSteelBlue for headings */
-  font-weight: 500;
-}
-
-#preset-panel-top label { /* General labels inside preset panel, if any */
-  font-size: 0.8rem;
-  color: #a0b4ce; /* Slightly darker than h4 */
-  margin-bottom: 0;
+  /* Style này sẽ được xử lý bởi Lit component */
 }
 
 #playback-controls-section {
@@ -257,21 +238,72 @@ input[type="file"] {
   min-width: 100px;
 }
 
-#mixer-area #playback-controls-section {
-  display: none;
+.active-preset-display {
+  /* Style này sẽ được xử lý bởi Lit component */
 }
 
-.active-preset-display {
-  position: absolute;
-  bottom: -30px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(10, 10, 20, 0.85); /* Darker bg for display */
-  padding: 4px 12px;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  white-space: nowrap;
-  z-index: 99;
-  color: #c0d0e0; /* Lighter text for active preset display */
-  border: 1px solid rgba(80, 80, 120, 0.3);
+/* Weight Knob Styles */
+weight-knob {
+  /* Xóa các variables không sử dụng */
+}
+
+weight-knob:hover {
+  /* Xóa các variables không sử dụng */
+}
+
+weight-knob .slider-track {
+  background: linear-gradient(to bottom, #444, #222);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+weight-knob .slider-thumb {
+  background: linear-gradient(to bottom, #fff, #ddd);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2),
+              inset 0 1px 1px rgba(255,255,255,0.8);
+  border: 1px solid rgba(0,0,0,0.2);
+  transition: transform 0.1s ease-out, box-shadow 0.1s ease-out;
+}
+
+weight-knob .slider-thumb:hover {
+  transform: translate(-50%, 50%) scale(1.1);
+  box-shadow: 0 3px 6px rgba(0,0,0,0.3),
+              inset 0 1px 1px rgba(255,255,255,0.9);
+}
+
+/* Knob Halo Effect */
+weight-knob #halo {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.3s ease-out,
+              background-color 0.3s ease-out;
+  filter: blur(12px);
+  mix-blend-mode: screen;
+}
+
+weight-knob:hover #halo {
+  filter: blur(15px);
+}
+
+/* Progress Arc Styles */
+weight-knob path[stroke="#fff"] {
+  transition: stroke-width 0.2s ease-out;
+  filter: drop-shadow(0 0 2px rgba(255,255,255,0.3));
+}
+
+weight-knob:hover path[stroke="#fff"] {
+  filter: drop-shadow(0 0 4px rgba(255,255,255,0.4));
+}
+
+/* Audio Level Effects */
+weight-knob[audioLevel="1"] #halo {
+  filter: blur(20px);
+  opacity: 0.9;
+}
+
+weight-knob[audioLevel="1"] .slider-thumb {
+  box-shadow: 0 0 15px var(--knob-color, #fff);
+}
+
+weight-knob[audioLevel="1"] path[stroke="#fff"] {
+  filter: drop-shadow(0 0 8px rgba(255,255,255,0.6));
 }

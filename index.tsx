@@ -139,25 +139,30 @@ class WeightKnob extends LitElement {
       cursor: grab; 
       position: relative; 
       width: 100%; 
-      height: 100%; /* Allow height to be set by parent */
-      display: flex; /* For centering slider track */
-      align-items: center; /* For centering slider track */
-      justify-content: center; /* For centering slider track */
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       flex-shrink: 0; 
       touch-action: none; 
     }
     :host([displayMode="knob"]) {
-      aspect-ratio: 1; /* Only for knob mode */
+      aspect-ratio: 1;
     }
     :host([displayMode="slider"]) {
-      /* Slider mode takes full height from prompt-controller */
+      width: 100%;
+      height: 100%;
+      flex-grow: 1;
+      margin-bottom: 8px;
     }
 
     svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
     #halo { 
       position: absolute; z-index: -1; top: 0; left: 0; 
       width: 100%; height: 100%; border-radius: 50%; 
-      mix-blend-mode: lighten; transform: scale(2); will-change: transform; 
+      mix-blend-mode: lighten; transform: scale(2); will-change: transform;
+      transition: background-color 0.1s ease-out, transform 0.1s ease-out;
+      filter: blur(8px);
     }
     :host([displayMode="slider"]) #halo { display: none; }
     :host([displayMode="slider"]) svg { display: none; }
@@ -169,6 +174,7 @@ class WeightKnob extends LitElement {
       border: 1px solid #555;
       border-radius: 6px;
       position: relative;
+      box-shadow: inset 0 0 8px rgba(0,0,0,0.3);
     }
     .slider-thumb {
       width: 30px; 
@@ -179,8 +185,11 @@ class WeightKnob extends LitElement {
       border-radius: 3px;
       position: absolute;
       left: 50%;
-      /* transform: translateX(-50%); Will be set with bottom */
-      cursor: grab;
+      transition: transform 0.1s ease-out, box-shadow 0.1s ease-out;
+    }
+    .slider-thumb:hover {
+      transform: translate(-50%, 50%) scale(1.1);
+      box-shadow: 0 0 8px rgba(255,255,255,0.7);
     }
   `];
   @property({ type: Number }) value = 0; 
@@ -204,16 +213,16 @@ class WeightKnob extends LitElement {
         if (track) {
             const rect = track.getBoundingClientRect();
             const relativeY = e.clientY - rect.top;
-            const newValue = (1 - (relativeY / rect.height)) * 2; // Max value is 2
+            const newValue = (1 - (relativeY / rect.height)) * 2;
             this.value = Math.max(0, Math.min(2, newValue));
             this.dispatchEvent(new CustomEvent<number>('input', { detail: this.value }));
-            this.dragStartValue = this.value; // Update dragStartValue for immediate drag
+            this.dragStartValue = this.value;
         }
     }
   }
   private handlePointerMove(e: PointerEvent) { 
     const delta = this.dragStartPos - e.clientY; 
-    this.value = this.dragStartValue + delta * (this.displayMode === 'slider' ? 0.02 : 0.01); // Slider more sensitive
+    this.value = this.dragStartValue + delta * (this.displayMode === 'slider' ? 0.02 : 0.01);
     this.value = Math.max(0, Math.min(2, this.value)); 
     this.dispatchEvent(new CustomEvent<number>('input', { detail: this.value })); 
   }
@@ -230,14 +239,38 @@ class WeightKnob extends LitElement {
     this.value = Math.max(0, Math.min(2, this.value)); 
     this.dispatchEvent(new CustomEvent<number>('input', { detail: this.value })); 
   }
-  private describeArc(centerX: number, centerY: number, startAngle: number, endAngle: number, radius: number ): string { const startX = centerX + radius * Math.cos(startAngle); const startY = centerY + radius * Math.sin(startAngle); const endX = centerX + radius * Math.cos(endAngle); const endY = centerY + radius * Math.sin(endAngle); const largeArcFlag = endAngle - startAngle <= Math.PI ? '0' : '1'; return `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${endX} ${endY}`; }
+  private describeArc(centerX: number, centerY: number, startAngle: number, endAngle: number, radius: number ): string { 
+    const startX = centerX + radius * Math.cos(startAngle); 
+    const startY = centerY + radius * Math.sin(startAngle); 
+    const endX = centerX + radius * Math.cos(endAngle); 
+    const endY = centerY + radius * Math.sin(endAngle); 
+    const largeArcFlag = endAngle - startAngle <= Math.PI ? '0' : '1'; 
+    return `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${endX} ${endY}`; 
+  }
+
+  private adjustColorBrightness(color: string, factor: number): string {
+    // Convert hex to RGB
+    const hex = color.replace('#', '');
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+
+    // Adjust brightness
+    const newR = Math.min(255, Math.round(r * factor));
+    const newG = Math.min(255, Math.round(g * factor));
+    const newB = Math.min(255, Math.round(b * factor));
+
+    // Convert back to hex
+    return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
+  }
   
   override render() { 
     if (this.displayMode === 'slider') {
       const valuePercentage = (this.value / 2) * 100;
       const thumbStyle = styleMap({
         bottom: `${valuePercentage}%`,
-        transform: `translate(-50%, 50%)` // Center thumb horizontally, align bottom of thumb with value point
+        transform: `translate(-50%, 50%)`,
+        boxShadow: this.audioLevel > 0.1 ? `0 0 ${8 + this.audioLevel * 12}px ${this.color}` : '0 0 5px rgba(255,255,255,0.5)'
       });
       return html`
         <div class="slider-track" @pointerdown=${this.handlePointerDown} @wheel=${this.handleWheel}>
@@ -245,12 +278,106 @@ class WeightKnob extends LitElement {
         </div>
       `;
     }
+
     // Knob rendering
-    const MIN_HALO_SCALE = 1; const MAX_HALO_SCALE = 2; const HALO_LEVEL_MODIFIER = 1; const rotationRange = Math.PI * 2 * 0.75; const minRot = -rotationRange / 2 - Math.PI / 2; const maxRot = rotationRange / 2 - Math.PI / 2; const rot = minRot + (this.value / 2) * (maxRot - minRot); const dotStyle = styleMap({ transform: `translate(40px, 40px) rotate(${rot}rad)` }); let scale = (this.value / 2) * (MAX_HALO_SCALE - MIN_HALO_SCALE); scale += MIN_HALO_SCALE; scale += this.audioLevel * HALO_LEVEL_MODIFIER; const haloStyle = styleMap({ display: this.value > 0 ? 'block' : 'none', background: this.color, transform: `scale(${scale})`, });
+    const MIN_HALO_SCALE = 1;
+    const MAX_HALO_SCALE = 2;
+    const HALO_LEVEL_MODIFIER = 1;
+    const rotationRange = Math.PI * 2 * 0.75;
+    const minRot = -rotationRange / 2 - Math.PI / 2;
+    const maxRot = rotationRange / 2 - Math.PI / 2;
+    const rot = minRot + (this.value / 2) * (maxRot - minRot);
+
+    // Dynamic color based on audio level
+    let haloColor = this.color;
+    if (this.audioLevel > 0.1) {
+      const brightnessFactor = 1 + (this.audioLevel * 0.3);
+      haloColor = this.adjustColorBrightness(this.color, brightnessFactor);
+    }
+
+    const dotStyle = styleMap({
+      transform: `translate(40px, 40px) rotate(${rot}rad)`,
+      filter: this.audioLevel > 0.1 ? `drop-shadow(0 0 ${2 + this.audioLevel * 4}px ${this.color})` : 'none'
+    });
+
+    let scale = (this.value / 2) * (MAX_HALO_SCALE - MIN_HALO_SCALE);
+    scale += MIN_HALO_SCALE;
+    scale += this.audioLevel * HALO_LEVEL_MODIFIER;
+
+    const haloStyle = styleMap({
+      display: this.value > 0 ? 'block' : 'none',
+      background: haloColor,
+      transform: `scale(${scale})`,
+      opacity: 0.7 + (this.audioLevel * 0.3)
+    });
+
+    const progressArcStrokeWidth = 3 + (this.audioLevel * 2);
+    const dotRadius = 2 + (this.audioLevel * 1.5);
+
     return html`
       <div id="halo" style=${haloStyle}></div>
-      <svg viewBox="0 0 80 80"> <ellipse opacity="0.4" cx="40" cy="40" rx="40" ry="40" fill="url(#f1)" /> <g filter="url(#f2)"> <ellipse cx="40" cy="40" rx="29" ry="29" fill="url(#f3)" /> </g> <g filter="url(#f4)"> <circle cx="40" cy="40" r="20.6667" fill="url(#f5)" /> </g> <circle cx="40" cy="40" r="18" fill="url(#f6)" /> <defs> <filter id="f2" x="8.33301" y="10.0488" width="63.333" height="64" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"> <feFlood flood-opacity="0" result="BackgroundImageFix" /> <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha" /> <feOffset dy="2" /><feGaussianBlur stdDeviation="1.5" /><feComposite in2="hardAlpha" operator="out" /> <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0" /><feBlend mode="normal" in2="BackgroundImageFix" result="shadow1" /> <feBlend mode="normal" in="SourceGraphic" in2="shadow1" result="shape" /> </filter> <filter id="f4" x="11.333" y="19.0488" width="57.333" height="59.334" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"> <feFlood flood-opacity="0" result="BackgroundImageFix" /> <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha" /> <feOffset dy="10" /><feGaussianBlur stdDeviation="4" /><feComposite in2="hardAlpha" operator="out" /> <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0" /><feBlend mode="normal" in2="BackgroundImageFix" result="shadow1" /> <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha" /> <feMorphology radius="5" operator="erode" in="SourceAlpha" result="shadow2" /> <feOffset dy="8" /><feGaussianBlur stdDeviation="3" /><feComposite in2="hardAlpha" operator="out" /> <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0" /><feBlend mode="normal" in2="shadow1" result="shadow2" /> <feBlend mode="normal" in="SourceGraphic" in2="shadow2" result="shape" /> </filter> <linearGradient id="f1" x1="40" y1="0" x2="40" y2="80" gradientUnits="userSpaceOnUse"> <stop stop-opacity="0.5" /><stop offset="1" stop-color="white" stop-opacity="0.3" /> </linearGradient> <radialGradient id="f3" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(40 40) rotate(90) scale(29 29)"> <stop offset="0.6" stop-color="white" /><stop offset="1" stop-color="white" stop-opacity="0.7" /> </radialGradient> <linearGradient id="f5" x1="40" y1="19.0488" x2="40" y2="60.3822" gradientUnits="userSpaceOnUse"> <stop stop-color="white" /><stop offset="1" stop-color="#F2F2F2" /> </linearGradient> <linearGradient id="f6" x1="40" y1="21.7148" x2="40" y2="57.7148" gradientUnits="userSpaceOnUse"> <stop stop-color="#EBEBEB" /><stop offset="1" stop-color="white" /> </linearGradient> </defs> </svg>
-      <svg viewBox="0 0 80 80" @pointerdown=${this.handlePointerDown} @wheel=${this.handleWheel}> <g style=${dotStyle}> <circle cx="14" cy="0" r="2" fill="#000" /> </g> <path d=${this.describeArc(40, 40, minRot, maxRot, 34.5)} fill="none" stroke="#0003" stroke-width="3" stroke-linecap="round" /> <path d=${this.describeArc(40, 40, minRot, rot, 34.5)} fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" /> </svg>
+      <svg viewBox="0 0 80 80">
+        <ellipse opacity="0.4" cx="40" cy="40" rx="40" ry="40" fill="url(#f1)" />
+        <g filter="url(#f2)">
+          <ellipse cx="40" cy="40" rx="29" ry="29" fill="url(#f3)" />
+        </g>
+        <g filter="url(#f4)">
+          <circle cx="40" cy="40" r="20.6667" fill="url(#f5)" />
+        </g>
+        <circle cx="40" cy="40" r="18" fill="url(#f6)" />
+        <defs>
+          <filter id="f2" x="8.33301" y="10.0488" width="63.333" height="64" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+            <feFlood flood-opacity="0" result="BackgroundImageFix" />
+            <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha" />
+            <feOffset dy="2" />
+            <feGaussianBlur stdDeviation="1.5" />
+            <feComposite in2="hardAlpha" operator="out" />
+            <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0" />
+            <feBlend mode="normal" in2="BackgroundImageFix" result="shadow1" />
+            <feBlend mode="normal" in="SourceGraphic" in2="shadow1" result="shape" />
+          </filter>
+          <filter id="f4" x="11.333" y="19.0488" width="57.333" height="59.334" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+            <feFlood flood-opacity="0" result="BackgroundImageFix" />
+            <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha" />
+            <feOffset dy="10" />
+            <feGaussianBlur stdDeviation="4" />
+            <feComposite in2="hardAlpha" operator="out" />
+            <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0" />
+            <feBlend mode="normal" in2="BackgroundImageFix" result="shadow1" />
+            <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha" />
+            <feMorphology radius="5" operator="erode" in="SourceAlpha" result="shadow2" />
+            <feOffset dy="8" />
+            <feGaussianBlur stdDeviation="3" />
+            <feComposite in2="hardAlpha" operator="out" />
+            <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0" />
+            <feBlend mode="normal" in2="shadow1" result="shadow2" />
+            <feBlend mode="normal" in="SourceGraphic" in2="shadow2" result="shape" />
+          </filter>
+          <linearGradient id="f1" x1="40" y1="0" x2="40" y2="80" gradientUnits="userSpaceOnUse">
+            <stop stop-opacity="0.5" />
+            <stop offset="1" stop-color="white" stop-opacity="0.3" />
+          </linearGradient>
+          <radialGradient id="f3" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(40 40) rotate(90) scale(29 29)">
+            <stop offset="0.6" stop-color="white" />
+            <stop offset="1" stop-color="white" stop-opacity="0.7" />
+          </radialGradient>
+          <linearGradient id="f5" x1="40" y1="19.0488" x2="40" y2="60.3822" gradientUnits="userSpaceOnUse">
+            <stop stop-color="white" />
+            <stop offset="1" stop-color="#F2F2F2" />
+          </linearGradient>
+          <linearGradient id="f6" x1="40" y1="21.7148" x2="40" y2="57.7148" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#EBEBEB" />
+            <stop offset="1" stop-color="white" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <svg viewBox="0 0 80 80" @pointerdown=${this.handlePointerDown} @wheel=${this.handleWheel}>
+        <g style=${dotStyle}>
+          <circle cx="14" cy="0" r=${dotRadius} fill="#000" />
+        </g>
+        <path d=${this.describeArc(40, 40, minRot, maxRot, 34.5)} fill="none" stroke="#0003" stroke-width=${progressArcStrokeWidth} stroke-linecap="round" />
+        <path d=${this.describeArc(40, 40, minRot, rot, 34.5)} fill="none" stroke="#fff" stroke-width=${progressArcStrokeWidth} stroke-linecap="round" />
+      </svg>
     `;
   }
 }
@@ -416,13 +543,12 @@ class PromptDjMidi extends LitElement {
     :host { 
       display: flex;
       flex-direction: column;
-      height: 100vh; /* Full viewport height */
+      height: 100vh;
       box-sizing: border-box; 
-      /* Adjust padding-top dynamically or ensure it's enough for the potentially taller top-controls-panel */
-      padding-top: 75px; /* Increased slightly to accommodate potential wrapping in top-controls-panel */
+      padding-top: 120px; /* Tăng padding-top để đảm bảo đủ không gian */
       position: relative; 
-      background-color: #111; /* Ensure host bg is set */
-      overflow: hidden; /* Prevent scrollbars on host due to internal content */
+      background-color: #111;
+      overflow: hidden;
     }
     #background { 
       will-change: background-image; 
@@ -432,6 +558,24 @@ class PromptDjMidi extends LitElement {
     }
     toast-message {} /* Component takes care of its own fixed positioning */
 
+    .top-controls-panel {
+      position: fixed;
+      top: 8px;
+      left: 8px;
+      right: 8px;
+      background: rgba(20, 20, 35, 0.92);
+      backdrop-filter: blur(6px);
+      padding: 8px 12px;
+      border-radius: 6px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      z-index: 1000;
+      border: 1px solid rgba(80, 80, 120, 0.4);
+      height: auto;
+      min-height: 59px; /* Thêm min-height để đảm bảo chiều cao tối thiểu */
+    }
     #preset-panel-top {
       padding: 8px 12px;
       background: rgba(25, 25, 25, 0.9);
@@ -478,14 +622,15 @@ class PromptDjMidi extends LitElement {
 
 
     #mixer-area {
-      flex-grow: 1; /* Takes remaining vertical space */
+      flex-grow: 1;
       display: flex;
       flex-direction: column;
-      align-items: center; /* Center children horizontally */
-      justify-content: flex-start; /* Align content to top */
+      align-items: center;
+      justify-content: flex-start;
       padding: 15px;
-      overflow-y: auto; /* Allow scrolling ONLY for mixer area if content overflows */
-      gap: 20px; /* Space between knob section, slider section, and play controls */
+      margin-top: 20px; /* Thêm margin-top để tạo khoảng cách với .active-preset-display */
+      overflow-y: auto;
+      gap: 20px;
       width: 100%;
       box-sizing: border-box;
     }
@@ -499,12 +644,14 @@ class PromptDjMidi extends LitElement {
       box-sizing: border-box;
     }
     #top-knobs-section prompt-controller {
-       height: 12vmin; 
-       min-height: 90px; max-height: 130px;
+       height: 8rem; /* Thay đổi từ 12vmin */
+       min-height: 90px;
+       max-height: 130px;
     }
     #bottom-sliders-section prompt-controller {
-       height: 28vmin; 
-       min-height: 180px; max-height: 250px;
+       height: 16rem; /* Thay đổi từ 28vmin */
+       min-height: 180px;
+       max-height: 250px;
     }
     
     /* Playback controls section (now part of preset panel) uses general button styling */
@@ -1244,3 +1391,10 @@ declare global {
     readonly timecode: DOMHighResTimeStamp;
   }
 }
+
+// Register custom elements
+customElements.define('weight-knob', WeightKnob);
+customElements.define('prompt-controller', PromptController);
+customElements.define('prompt-dj-midi', PromptDjMidi);
+customElements.define('play-pause-button', PlayPauseButton);
+customElements.define('toast-message', ToastMessage);
